@@ -92,7 +92,7 @@ func adminListProblems(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"items": out})
 }
 
-func adminGetProblem(w http.ResponseWriter, _ *http.Request, id string) {
+func adminGetProblem(w http.ResponseWriter, r *http.Request, id string) {
 	conn, err := db.Open()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
