@@ -24,6 +24,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/admin/releases", handlers.AdminReleases) // GET+POST(/admin/release简化为此)
 	mux.HandleFunc("/admin/release", handlers.AdminReleases)  // 兼容：POST
 	mux.HandleFunc("/admin/rollback", handlers.AdminRollback)
+	mux.HandleFunc("/admin/metrics", handlers.AdminMetrics)
 
 	// problems：同时支持
 	// - GET /v1/problems
@@ -52,6 +53,9 @@ func NewRouter() http.Handler {
 		}
 		handlers.GetProblemByID(w, r, id)
 	})
+
+	// 埋点（App侧）
+	mux.HandleFunc("/v1/analytics/event", handlers.AnalyticsEvent)
 
 	return mux
 }
