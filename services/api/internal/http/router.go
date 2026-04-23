@@ -18,6 +18,13 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/v1/audio/", handlers.AudioGetByID)           // GET
 	mux.HandleFunc("/v1/inference", handlers.Inference)           // POST
 
+	// Admin API（MVP：Header token 鉴权）
+	mux.HandleFunc("/admin/problems", handlers.AdminProblems)
+	mux.HandleFunc("/admin/problems/", handlers.AdminProblemByID)
+	mux.HandleFunc("/admin/releases", handlers.AdminReleases) // GET+POST(/admin/release简化为此)
+	mux.HandleFunc("/admin/release", handlers.AdminReleases)  // 兼容：POST
+	mux.HandleFunc("/admin/rollback", handlers.AdminRollback)
+
 	// problems：同时支持
 	// - GET /v1/problems
 	// - GET /v1/problems/{id}
