@@ -278,6 +278,70 @@ input {
   align-items: start;
 }
 
+.releases-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.releases-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.table-wrap {
+  max-height: min(680px, calc(100vh - 220px));
+  overflow: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--secondary) 12%, #ffffff 88%);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-weight: 900;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(8px);
+}
+
+.table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.cell-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.cell-notes {
+  max-width: 380px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--text) 90%, #000000 10%);
+}
+
 .problems-list {
   display: flex;
   flex-direction: column;
@@ -587,6 +651,18 @@ input {
   color: var(--muted);
 }
 
+.pill--success {
+  background: color-mix(in srgb, var(--success) 18%, #ffffff 82%);
+  border-color: color-mix(in srgb, var(--success) 36%, #ffffff 64%);
+  color: color-mix(in srgb, var(--success) 55%, var(--text) 45%);
+}
+
+.pill--danger {
+  background: color-mix(in srgb, var(--danger) 16%, #ffffff 84%);
+  border-color: color-mix(in srgb, var(--danger) 34%, #ffffff 66%);
+  color: color-mix(in srgb, var(--danger) 62%, var(--text) 38%);
+}
+
 /* === Toast === */
 .toast {
   position: fixed;
@@ -649,6 +725,10 @@ input {
   }
 
   .problems-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .releases-layout {
     grid-template-columns: 1fr;
   }
 }
