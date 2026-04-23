@@ -21,3 +21,5 @@ dist/
 .env
 .env.*
 
+# Brainstorming visual companion artifacts
+.superpowers/
