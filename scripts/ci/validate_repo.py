@@ -106,6 +106,13 @@ def main() -> None:
     assert_doc_exists("docs/project/RACI.md")
     assert_doc_exists("docs/project/RISKS.md")
 
+    # migrations 存在（后续 CI 会跑 docker compose + goose）
+    if not (ROOT / "services" / "api" / "migrations" / "0001_init.sql").exists():
+        fail("缺少 migrations/0001_init.sql")
+    if not (ROOT / "services" / "api" / "migrations" / "0002_release_and_audit.sql").exists():
+        fail("缺少 migrations/0002_release_and_audit.sql")
+    ok("migrations 文件存在")
+
     scan_for_legacy_brand()
 
     ok("全部校验通过")
