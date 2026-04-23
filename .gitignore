@@ -1,0 +1,23 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Node / Web (for admin console if added later)
+node_modules/
+dist/
+.next/
+
+# Logs
+*.log
+
+# Local env
+.env
+.env.*
+

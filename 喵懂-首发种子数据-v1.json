@@ -1,0 +1,647 @@
+{
+  "meta": {
+    "app": "喵懂",
+    "content_version": 1,
+    "schema_version": "1.0",
+    "locale": "zh-CN",
+    "tone": "温柔陪伴型-科学克制",
+    "notes": [
+      "本文件用于初始化：问题库/追问/建议/复测/风险文案/工具区（先C无链接）/解释模板/小红书模板/增长玩法配置（人格卡/成就/热力图/称号/同城对比占位）。",
+      "建议后台实现“草稿-发布-回滚-灰度”，发布时生成新的content_version；线上记录每次推理使用的content_version以便回溯。"
+    ]
+  },
+  "global_copy": {
+    "disclaimer_short": "本结果为行为与场景的辅助理解，不构成医疗诊断。若出现精神差、食欲差、呕吐、便血、持续哀鸣等情况，请尽快咨询兽医。",
+    "danger_red_prompt": "我有点担心：如果出现“持续尖叫/明显疼痛反应/便血或尿血/精神明显变差”，请优先联系兽医。"
+  },
+  "taxonomy": {
+    "intents": [
+      { "code": "FOOD", "label": "求食/想加餐", "category": "A", "share_safe": true },
+      { "code": "ATTENTION", "label": "求关注/求陪伴", "category": "A", "share_safe": true },
+      { "code": "PLAY", "label": "想玩/精力过剩", "category": "A", "share_safe": true },
+      { "code": "DOOR", "label": "想出门/想开门", "category": "A", "share_safe": true },
+      { "code": "LITTER", "label": "厕所相关/求清理砂盆", "category": "A", "share_safe": true },
+      { "code": "PROTEST", "label": "不满/抗议", "category": "A", "share_safe": true },
+      { "code": "ALERT", "label": "警惕/有动静", "category": "A", "share_safe": true },
+      { "code": "FEAR", "label": "害怕/需要安抚", "category": "A", "share_safe": true },
+      { "code": "GREET", "label": "打招呼/迎接", "category": "A", "share_safe": true },
+      { "code": "WATER", "label": "想喝水/找水", "category": "A", "share_safe": true }
+    ],
+    "risk_badges": [
+      {
+        "code": "STRESS_SUSPECTED",
+        "title": "应激疑似",
+        "level": "info",
+        "share_safe": false,
+        "copy": "仅为风险提示，非诊断；如近期有环境变化，可优先稳定作息与安全区。"
+      },
+      {
+        "code": "ESTRUS_SUSPECTED",
+        "title": "发情/求偶疑似",
+        "level": "info",
+        "share_safe": false,
+        "copy": "仅为风险提示，非诊断；可结合是否绝育与持续周期判断。"
+      },
+      {
+        "code": "DISCOMFORT_SUSPECTED",
+        "title": "不舒服疑似",
+        "level": "warning",
+        "share_safe": false,
+        "copy": "仅为风险提示，非诊断；若伴随精神/食欲变化，请咨询兽医。"
+      },
+      {
+        "code": "PAIN_SUSPECTED",
+        "title": "疼痛疑似（安全提醒）",
+        "level": "danger",
+        "share_safe": false,
+        "copy": "我有点担心：若出现持续尖叫、明显疼痛反应、便血/尿血或精神明显变差，请尽快联系兽医。"
+      }
+    ]
+  },
+  "problems": [
+    {
+      "id": "night_meow",
+      "title": "半夜叫",
+      "summary": "先别慌，半夜叫大多和“精力没消耗够/想要互动/作息和进食节奏”有关。我们一步步排查，很快就能更接近原因。",
+      "tags": ["夜间", "睡眠", "作息"],
+      "cause_framework": [
+        "精力过剩：白天睡多、晚上精神",
+        "习惯被强化：一叫就有回应/喂食",
+        "饥饿或进食节奏不稳",
+        "环境应激：搬家、噪音、陌生气味",
+        "（少量）发情/求偶相关可能"
+      ],
+      "retest_plan_72h": [
+        "连续3晚记录：夜叫次数、持续分钟数、发生时间点",
+        "目标：夜叫次数下降≥30%可视为有效改善",
+        "若加重或伴随异常（食欲/精神/持续哀鸣），升级到黄色/红色提示"
+      ],
+      "risk_level_copy": {
+        "green": "精神食欲正常，主要是作息/注意力/精力问题：先按建议调整看看。",
+        "yellow": "夜叫明显加重 + 白天也烦躁/躲藏：建议咨询兽医或专业人士。",
+        "red": "持续尖叫、明显疼痛反应、精神食欲骤变：建议尽快就医。"
+      }
+    },
+    {
+      "id": "always_meow",
+      "title": "一直叫",
+      "summary": "一直叫通常是在“要你注意它”。我们先把“饿/砂盆/不舒服”这些基础项排掉，再看它更像求关注、求食，还是环境不适。",
+      "tags": ["持续", "注意力", "排查"],
+      "cause_framework": [
+        "求关注/想互动",
+        "求食/想加餐",
+        "习惯强化：叫→你就回应",
+        "环境不适：陌生人/噪音/窗外刺激",
+        "（少量）不舒服疑似：伴随精神食欲变化"
+      ],
+      "retest_plan_72h": [
+        "每天固定两次记录：叫声持续时长、触发点（你回家/饭点/门口）",
+        "目标：安静间隔变长；叫声持续时长下降",
+        "若出现精神差/食欲差/躲藏等异常，升级黄色/红色提示"
+      ],
+      "risk_level_copy": {
+        "green": "先排查基础需求，再做“安静时奖励”的注意力训练。",
+        "yellow": "持续叫 + 行为明显异常（躲藏/惊恐/攻击性增加）：建议咨询专业人士。",
+        "red": "持续哀鸣 + 精神食欲明显变差：建议尽快就医。"
+      }
+    },
+    {
+      "id": "after_litter_meow",
+      "title": "拉完叫",
+      "summary": "拉完叫不一定是坏事：有的猫是“报备/求夸夸”，也可能是“砂盆体验不舒服”。我们用几步把两种情况分开。",
+      "tags": ["猫砂盆", "如厕后", "排查"],
+      "cause_framework": [
+        "砂盆需要清理/砂不舒服/位置不满意",
+        "如厕后求关注（“我做完啦”）",
+        "频繁进出砂盆、用力等异常（少量风险提示）"
+      ],
+      "retest_plan_72h": [
+        "连续3天记录：如厕次数、拉完叫频次、清理频次",
+        "目标：清理与调整后，拉完叫频次下降或更稳定",
+        "若出现频繁进出砂盆/用力但很少/便血尿血，触发红色提示"
+      ],
+      "risk_level_copy": {
+        "green": "先优化砂盆体验，再观察是否变为更稳定的“报备型”叫声。",
+        "yellow": "频繁如厕或明显不适：建议尽快咨询兽医或专业人士。",
+        "red": "便血/尿血、明显疼痛反应：建议尽快就医。"
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_night_01",
+      "problem_id": "night_meow",
+      "priority": 100,
+      "text": "通常发生在你关灯后 0-30 分钟内吗？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" }
+      ]
+    },
+    {
+      "id": "q_night_02",
+      "problem_id": "night_meow",
+      "priority": 90,
+      "text": "睡前你有做过 5-10 分钟互动消耗吗？",
+      "type": "single_choice",
+      "options": [
+        { "value": "enough", "label": "足够" },
+        { "value": "some", "label": "一般" },
+        { "value": "none", "label": "没有" }
+      ]
+    },
+    {
+      "id": "q_night_03",
+      "problem_id": "night_meow",
+      "priority": 80,
+      "text": "它叫的时候，你回应（说话/开灯/喂食）会让它更起劲吗？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "会" },
+        { "value": "no", "label": "不会" },
+        { "value": "unknown", "label": "不确定" }
+      ]
+    },
+    {
+      "id": "q_night_04",
+      "problem_id": "night_meow",
+      "priority": 60,
+      "text": "它是否未绝育，且叫声更像“嚎叫/拖长音”？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" },
+        { "value": "unknown", "label": "不确定" }
+      ]
+    },
+    {
+      "id": "q_night_05",
+      "problem_id": "night_meow",
+      "priority": 50,
+      "text": "最近是否有搬家/新增宠物/施工噪音？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" }
+      ]
+    },
+    {
+      "id": "q_always_01",
+      "problem_id": "always_meow",
+      "priority": 100,
+      "text": "它叫的时候，你回应会让它更频繁吗？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "会" },
+        { "value": "no", "label": "不会" },
+        { "value": "unknown", "label": "不确定" }
+      ]
+    },
+    {
+      "id": "q_always_02",
+      "problem_id": "always_meow",
+      "priority": 90,
+      "text": "距离上次喂食超过 6 小时了吗？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" },
+        { "value": "unknown", "label": "不确定" }
+      ]
+    },
+    {
+      "id": "q_always_03",
+      "problem_id": "always_meow",
+      "priority": 80,
+      "text": "它是否同时抓门/绕圈/盯窗外？",
+      "type": "single_choice",
+      "options": [
+        { "value": "door", "label": "抓门/门口叫" },
+        { "value": "circle", "label": "绕圈/来回走" },
+        { "value": "window", "label": "盯窗外/窗边叫" },
+        { "value": "none", "label": "都没有" }
+      ]
+    },
+    {
+      "id": "q_always_04",
+      "problem_id": "always_meow",
+      "priority": 60,
+      "text": "最近是否换粮/换砂/来客/施工？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" }
+      ]
+    },
+    {
+      "id": "q_always_05",
+      "problem_id": "always_meow",
+      "priority": 50,
+      "text": "是否出现精神变差或食欲下降？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" }
+      ]
+    },
+    {
+      "id": "q_litter_01",
+      "problem_id": "after_litter_meow",
+      "priority": 100,
+      "text": "拉完是立刻叫吗？",
+      "type": "single_choice",
+      "options": [
+        { "value": "immediate", "label": "立刻" },
+        { "value": "later", "label": "隔一会儿" }
+      ]
+    },
+    {
+      "id": "q_litter_02",
+      "problem_id": "after_litter_meow",
+      "priority": 90,
+      "text": "最近砂盆是否较脏或刚换过猫砂/位置？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" }
+      ]
+    },
+    {
+      "id": "q_litter_03",
+      "problem_id": "after_litter_meow",
+      "priority": 80,
+      "text": "它会不会拉完带你去看砂盆、或者蹭你求关注？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "会" },
+        { "value": "no", "label": "不会" },
+        { "value": "unknown", "label": "不确定" }
+      ]
+    },
+    {
+      "id": "q_litter_04",
+      "problem_id": "after_litter_meow",
+      "priority": 60,
+      "text": "是否出现频繁进出砂盆/用力但很少/便血尿血？",
+      "type": "single_choice",
+      "options": [
+        { "value": "yes", "label": "是" },
+        { "value": "no", "label": "否" }
+      ]
+    },
+    {
+      "id": "q_litter_05",
+      "problem_id": "after_litter_meow",
+      "priority": 50,
+      "text": "你家是几只猫共用砂盆？",
+      "type": "single_choice",
+      "options": [
+        { "value": "1", "label": "1只" },
+        { "value": "2", "label": "2只" },
+        { "value": "3plus", "label": "3只+" }
+      ]
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "s_night_01",
+      "problem_id": "night_meow",
+      "priority": 100,
+      "title": "睡前“消耗—满足—安静”小仪式（建议先试3天）",
+      "steps": [
+        "逗猫棒/追逐 5-10 分钟（让它小喘气）",
+        "结束后给一点点奖励或晚餐",
+        "关灯后保持环境安静、不要再逗它"
+      ],
+      "expected_window_hours": 24,
+      "retest_tip": "明晚同一时段再测一次，看夜叫次数是否下降"
+    },
+    {
+      "id": "s_night_02",
+      "problem_id": "night_meow",
+      "priority": 90,
+      "title": "避免把“叫”训练成“按钮”",
+      "steps": [
+        "夜叫时先不要立刻喂食/开灯",
+        "等它安静 5-10 秒再给予回应（轻声安抚即可）",
+        "白天增加互动，让“要关注”不必靠夜里叫"
+      ],
+      "expected_window_hours": 72,
+      "retest_tip": "观察 72 小时，安静间隔是否变长"
+    },
+    {
+      "id": "s_night_03",
+      "problem_id": "night_meow",
+      "priority": 70,
+      "title": "如果更像应激：先给它一个稳定的安全区",
+      "steps": [
+        "准备固定安全区（纸箱/猫窝/毯子）",
+        "夜间留一点点环境声（白噪音/轻音乐）",
+        "保持作息与进食稳定"
+      ],
+      "expected_window_hours": 72,
+      "retest_tip": "应激通常会随稳定环境逐步好转，3天后复测对比"
+    },
+    {
+      "id": "s_always_01",
+      "problem_id": "always_meow",
+      "priority": 100,
+      "title": "先排查“基础需求四件套”",
+      "steps": [
+        "检查水是否新鲜、碗是否干净",
+        "检查粮是否足够、是否到了饭点",
+        "检查砂盆是否需要清理",
+        "给一个安静安全区（可躲可休息）"
+      ],
+      "expected_window_hours": 24,
+      "retest_tip": "排查后再测一次，看主标签是否从“求食/厕所相关”转为更稳定"
+    },
+    {
+      "id": "s_always_02",
+      "problem_id": "always_meow",
+      "priority": 90,
+      "title": "把回应“奖励”给安静，而不是给叫",
+      "steps": [
+        "它一直叫时先不立刻满足要求",
+        "等它安静几秒再给抚摸/说话/少量奖励",
+        "白天固定两次互动，让它不必靠叫来要关注"
+      ],
+      "expected_window_hours": 72,
+      "retest_tip": "观察安静间隔是否变长；3天后复测对比"
+    },
+    {
+      "id": "s_always_03",
+      "problem_id": "always_meow",
+      "priority": 70,
+      "title": "把精力用在正确地方：环境丰富化",
+      "steps": [
+        "安排抓板/高处路线，让它有事做",
+        "把零食改成“动脑获得”（简单漏食玩具）",
+        "减少窗外刺激（必要时拉窗帘/转移注意）"
+      ],
+      "expected_window_hours": 72,
+      "retest_tip": "3天后看叫声持续时长是否下降"
+    },
+    {
+      "id": "s_litter_01",
+      "problem_id": "after_litter_meow",
+      "priority": 100,
+      "title": "先把砂盆体验做到“干净、好挖、好上”",
+      "steps": [
+        "立刻清理结团与粘底，保持干爽",
+        "检查砂量：太浅不好埋、太深费力（按习惯微调）",
+        "若多猫：尽量做到“砂盆数≈猫数+1”"
+      ],
+      "expected_window_hours": 24,
+      "retest_tip": "调整后复测：拉完叫频次是否下降/更稳定"
+    },
+    {
+      "id": "s_litter_02",
+      "problem_id": "after_litter_meow",
+      "priority": 90,
+      "title": "如果更像“报备/求夸夸”：给它温柔但不过度的回应",
+      "steps": [
+        "它如厕后过来叫，可以轻声夸一句+抚摸几秒",
+        "不要每次都加餐，避免把叫声强化成“要吃的”",
+        "把奖励固定在“安静后”更好"
+      ],
+      "expected_window_hours": 72,
+      "retest_tip": "3天后看叫声是否更短、更稳定"
+    },
+    {
+      "id": "s_litter_03",
+      "problem_id": "after_litter_meow",
+      "priority": 60,
+      "title": "如果出现异常信号：优先安全",
+      "steps": [
+        "若频繁进出砂盆/用力但很少/便血尿血：请尽快咨询兽医",
+        "同时记录：饮水量、如厕次数、精神状态，便于医生判断"
+      ],
+      "expected_window_hours": 0,
+      "retest_tip": "安全优先：不建议继续复测等待"
+    }
+  ],
+  "tools_guides": [
+    {
+      "id": "tg_night",
+      "problem_id": "night_meow",
+      "collapsed_by_default": true,
+      "guide_bullets": [
+        "选互动玩具：优先“可控、可重复、你能参与”的（逗猫棒比自动玩具更有效）",
+        "选漏食玩具：出粮速度可调、易清洗，别一上来选太难",
+        "自动产品别迷信：它只能“省力”，不能替代互动"
+      ],
+      "efficiency_items": [
+        { "sku_key": "wand_toy_basic", "name": "逗猫棒（基础款）", "reason": "高效消耗精力，改善夜叫", "buy_link": null },
+        { "sku_key": "treat_puzzle_easy", "name": "简单漏食玩具", "reason": "把“想吃/无聊”分流到更健康的方式", "buy_link": null }
+      ]
+    },
+    {
+      "id": "tg_always",
+      "problem_id": "always_meow",
+      "collapsed_by_default": true,
+      "guide_bullets": [
+        "不建议用“吓唬/喷水”压制：可能加重焦虑与对抗",
+        "先排查基础需求，再谈训练；训练靠一致性，不靠大声",
+        "窗外刺激很常见：必要时先减少刺激源"
+      ],
+      "efficiency_items": [
+        { "sku_key": "scratcher_board", "name": "抓板/抓柱", "reason": "提供稳定释放精力的出口", "buy_link": null },
+        { "sku_key": "puzzle_feeder_easy", "name": "入门漏食玩具", "reason": "转移注意力、减少无聊叫", "buy_link": null }
+      ]
+    },
+    {
+      "id": "tg_litter",
+      "problem_id": "after_litter_meow",
+      "collapsed_by_default": true,
+      "guide_bullets": [
+        "砂盆长期潮湿/粘底会显著降低体验，容易触发拉完叫",
+        "多猫家庭建议“砂盆数≈猫数+1”作为经验起点",
+        "除味优先选择不刺鼻的方案，强香味可能造成应激"
+      ],
+      "efficiency_items": [
+        { "sku_key": "litter_scoop_good", "name": "好用的猫砂铲", "reason": "提升清理效率，砂盆更干净", "buy_link": null },
+        { "sku_key": "litter_mat", "name": "落砂垫", "reason": "减少落砂，降低清理负担", "buy_link": null }
+      ]
+    }
+  ],
+  "templates": {
+    "explanation_templates": {
+      "PATTERN": {
+        "ATTENTION": ["叫声短促且间隔逐渐变短，像是在确认“你有没有听见我”。"],
+        "FOOD": ["叫声更规律，常出现在接近饭点或你靠近食盆时。"],
+        "PLAY": ["叫声伴随兴奋状态，常见于夜间或它精力很足的时候。"],
+        "LITTER": ["更集中出现在如厕前后，且会在砂盆附近反复出现。"],
+        "ALERT": ["叫声更警惕，常伴随盯窗外/门口、耳朵朝向声源。"],
+        "FEAR": ["叫声更紧张或躲藏，常与突发噪音/陌生环境有关。"]
+      },
+      "CONTEXT": {
+        "default": [
+          "你补充的场景信息，能帮助我把结果理解得更贴近真实情况。",
+          "如果你愿意，再复测一次（同一时间/同一场景），结果会更稳定。"
+        ]
+      }
+    },
+    "xhs_share_templates": {
+      "night_meow": {
+        "titles": [
+          "半夜一直喵别慌，我用“喵测”找到原因了（新人救命）",
+          "我家猫半夜叫了3天，我用这个方法让它安静下来",
+          "你家猫半夜叫，是饿还是想玩？我用一次测评搞清楚"
+        ],
+        "body_templates": [
+          "【场景】半夜{time}开始叫，我这个新手真的慌🥲\\n【测一测结果】更像：{intent_label}（{confidence}%）\\n【我做了两步】1）{step1} 2）{step2}\\n【72小时变化】{change}\\n你家猫半夜叫一般是什么情况？评论区接龙我一起整理！",
+          "新人误区：它一叫我就{mistake}，结果越叫越凶…\\n后来我按“喵懂/喵测”建议改成：{fix}\\n复测对比：{before_after}\\n（温柔提醒：这不是诊断，只是排查思路）",
+          "睡前小仪式清单（3条）：\\n1）{ritual1}\\n2）{ritual2}\\n3）{ritual3}\\n测一测结果：{intent_label}（{confidence}%）\\n欢迎晒你家猫的结果卡，我想做个新人对照表！"
+        ],
+        "comment_prompts": [
+          "你家猫半夜叫是几点？我帮你一起判断更像哪种情况",
+          "把你家猫叫声测出来的标签发出来，我整理一份新人对照表",
+          "有没有人是“拉完叫/一直叫”的？我也在做系列"
+        ],
+        "hashtags": ["#养猫新手", "#猫半夜叫", "#喵懂", "#喵测", "#铲屎官日常"]
+      },
+      "always_meow": {
+        "titles": [
+          "猫一直叫到底要啥？我用一次测评把原因排掉了",
+          "新手养猫：别用吼！这样做叫声明显少了",
+          "一直叫=不舒服吗？先按这个顺序排查"
+        ],
+        "body_templates": [
+          "【先排查】水/粮/砂盆/安全区\\n【测一测结果】更像：{intent_label}（{confidence}%）\\n我做的改变：{change}\\n复测：{before_after}\\n评论区说说你家是哪一种？"
+        ],
+        "comment_prompts": ["你家猫更像求关注还是求食？晒一下结果卡我帮你对照"],
+        "hashtags": ["#猫一直叫", "#养猫攻略", "#喵懂", "#喵测"]
+      },
+      "after_litter_meow": {
+        "titles": [
+          "拉完喵喵叫是在求夸吗？我测完发现真相挺可爱",
+          "新手必看：拉完叫先别急着笑，先排查这3件事",
+          "砂盆不舒服会拉完叫？我调整后变化太明显了"
+        ],
+        "body_templates": [
+          "【场景】它如厕后就开始叫\\n【测一测结果】更像：{intent_label}（{confidence}%）\\n【我先做了】清理砂盆+调整砂量\\n【复测】{before_after}\\n你家猫会拉完叫吗？"
+        ],
+        "comment_prompts": ["多猫家庭砂盆怎么配？想听听大家经验"],
+        "hashtags": ["#拉完叫", "#猫砂盆", "#养猫新手", "#喵懂", "#喵测"]
+      }
+    }
+  },
+  "growth_modules": {
+    "priority_from_user": [
+      "persona_card",
+      "achievement_system",
+      "daily_schedule_heatmap",
+      "nickname_titles",
+      "city_age_peer_compare"
+    ],
+    "implementation_note": [
+      "工程实现顺序建议：先做成就系统（依赖现有复测/反馈，成本最低）→ 人格卡（7天聚合）→ 热力图（聚合可视化）→ 称号（映射）→ 同城/同龄对比（需要样本量与合规口径）。",
+      "增长优先级与工程顺序可不同：人格卡最适合“炫耀传播”，成就系统最适合“连载上瘾”。"
+    ],
+    "persona_card": {
+      "window_days": 7,
+      "min_events": 6,
+      "output_max_labels": 2,
+      "labels": [
+        {
+          "code": "SOCIAL_BABY",
+          "title": "社交黏人型",
+          "description": "更容易用“叫你”来发起互动。",
+          "evidence_template": "近7天“求关注/迎接”占比{ratio}% ，高峰在{peak_time}。",
+          "rules": [{ "intent_codes": ["ATTENTION", "GREET"], "min_ratio": 0.38 }]
+        },
+        {
+          "code": "FOODIE",
+          "title": "美食驱动型",
+          "description": "饭点与加餐是它的头等大事。",
+          "evidence_template": "近7天“求食”占比{ratio}% ，最常出现在{peak_time}。",
+          "rules": [{ "intent_codes": ["FOOD"], "min_ratio": 0.28 }]
+        },
+        {
+          "code": "NIGHT_EXPLORER",
+          "title": "夜行动物型",
+          "description": "夜里更精神，需要更稳定的睡前仪式。",
+          "evidence_template": "近7天夜间测评占比{ratio}% ，夜里更容易出现“想玩/想开门”。",
+          "rules": [{ "time_bucket": "night", "min_ratio": 0.45 }]
+        },
+        {
+          "code": "LITTER_QC",
+          "title": "砂盆质检型",
+          "description": "对砂盆体验很敏感，爱“提醒你”。",
+          "evidence_template": "近7天“厕所相关”占比{ratio}% ，常发生在如厕后。",
+          "rules": [{ "intent_codes": ["LITTER"], "min_ratio": 0.18 }]
+        },
+        {
+          "code": "SENSITIVE_GUARD",
+          "title": "高敏警戒型",
+          "description": "更容易对声音/陌生气味产生反应。",
+          "evidence_template": "近7天“警惕/害怕”占比{ratio}% ，与环境变化相关性更高。",
+          "rules": [{ "intent_codes": ["ALERT", "FEAR"], "min_ratio": 0.22 }]
+        }
+      ],
+      "share": {
+        "enabled": true,
+        "share_title_template": "我家猫的「喵懂人格」：{persona_title}",
+        "share_note": "温柔提醒：这是近7天行为与场景的倾向总结，不是诊断。"
+      }
+    },
+    "achievement_system": {
+      "achievements": [
+        {
+          "code": "NIGHT_DOWN_30",
+          "title": "夜叫下降 30%",
+          "how_to_get": "连续3晚复测，并在同一问题下夜叫指标下降≥30%",
+          "share_text": "我们一起把夜叫降下来啦！继续保持睡前小仪式。"
+        },
+        {
+          "code": "RETEST_STREAK_3",
+          "title": "复测打卡 3 连",
+          "how_to_get": "同一问题连续3天完成复测",
+          "share_text": "认真记录的铲屎官最强！复测越稳定，结果越可靠。"
+        },
+        {
+          "code": "LITTER_OPTIMIZED",
+          "title": "砂盆体验优化完成",
+          "how_to_get": "在“拉完叫”问题下完成建议并反馈“有用”",
+          "share_text": "砂盆舒适度提升成功！它的叫声也更稳定了。"
+        }
+      ],
+      "share": { "enabled": true, "card_style": "achievement_card_v1" }
+    },
+    "daily_schedule_heatmap": {
+      "enabled": true,
+      "window_days": 7,
+      "time_buckets": ["late_night", "morning", "afternoon", "evening"],
+      "aggregation": "count_by_intent_and_time_bucket",
+      "share": { "enabled": true, "share_title": "我家猫的「喵懂日程」热力图（7天）" }
+    },
+    "nickname_titles": {
+      "enabled": true,
+      "mapping": [
+        { "intent_code": "LITTER", "title": "砂盆质检员", "note": "偶尔提醒你保持砂盆舒适" },
+        { "intent_code": "FOOD", "title": "饭点提醒大师", "note": "对吃饭时间非常敏感" },
+        { "intent_code": "ATTENTION", "title": "贴贴小天才", "note": "更需要互动与陪伴" },
+        { "intent_code": "PLAY", "title": "精力小火箭", "note": "需要规律消耗精力" }
+      ],
+      "copy_rule": "称号仅作温柔玩笑，不做绝对判断；优先展示证据与建议。"
+    },
+    "city_age_peer_compare": {
+      "enabled": false,
+      "privacy_note": "仅展示群体统计趋势，不展示任何可识别信息；样本量不足时不启用。",
+      "min_sample_size": 2000,
+      "segments": ["city_tier", "age_group"],
+      "example_copy": "你家成猫在晚间“求关注”倾向高于同城 {percentile}% 的猫（样本量充足时展示）。"
+    }
+  },
+  "mappings": {
+    "intent_to_problem_recommendations": [
+      { "intent_code": "PLAY", "problem_id": "night_meow", "weight": 0.9 },
+      { "intent_code": "FOOD", "problem_id": "night_meow", "weight": 0.7 },
+      { "intent_code": "ATTENTION", "problem_id": "always_meow", "weight": 0.9 },
+      { "intent_code": "FOOD", "problem_id": "always_meow", "weight": 0.7 },
+      { "intent_code": "LITTER", "problem_id": "after_litter_meow", "weight": 0.95 }
+    ]
+  }
+}
