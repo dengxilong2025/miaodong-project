@@ -272,7 +272,10 @@
       case "releases":
         return { title: "Releases", desc: "发布/回滚页面准备中～别急别急～" };
       case "metrics":
-        return { title: "Metrics", desc: "指标看板准备中～数据在路上啦～" };
+        return {
+          title: "Metrics",
+          desc: "指标查询：时间窗/Problem 过滤 + Top10 事件统计 + 反馈帮助率",
+        };
       case "audit":
         return { title: "Audit", desc: "喵～日志页即将上线，先喝口奶茶等一下～" };
       default:
@@ -1307,6 +1310,334 @@
     void loadList();
   }
 
+  function metricsLoadingHTML() {
+    return `
+      <div class="page page--wide">
+        <div class="card card--panel">
+          <div class="card__header">
+            <div>
+              <div class="card__title-sm">查询条件</div>
+              <div class="card__subtle">GET /admin/metrics?from_ts_ms=&to_ts_ms=&problem_id=</div>
+            </div>
+            <span class="pill pill--soft">时间窗支持快捷</span>
+          </div>
+
+          <form id="metricsForm" class="form" autocomplete="off">
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-metrics-quick="24h">近 24h</button>
+              <button class="btn btn--ghost" type="button" data-metrics-quick="7d">近 7d</button>
+              <button class="btn btn--ghost" type="button" data-metrics-quick="30d">近 30d</button>
+              <span class="pill pill--soft">from/to 用 ms 时间戳</span>
+            </div>
+
+            <div class="metrics-filter-grid">
+              <div class="field">
+                <label for="metricsFrom">from_ts_ms</label>
+                <input id="metricsFrom" class="input cell-mono" inputmode="numeric" placeholder="例如：1713840000000" />
+              </div>
+              <div class="field">
+                <label for="metricsTo">to_ts_ms</label>
+                <input id="metricsTo" class="input cell-mono" inputmode="numeric" placeholder="例如：1713926400000" />
+              </div>
+              <div class="field">
+                <label for="metricsProblemId">problem_id（可选）</label>
+                <input id="metricsProblemId" class="input" placeholder="例如：night_meow" />
+              </div>
+              <div class="field">
+                <label>&nbsp;</label>
+                <button class="btn btn--primary" type="submit" id="metricsQueryBtn">查询</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="grid" style="margin-top:14px;">
+          <div class="card card--panel">
+            <div class="card__header">
+              <div>
+                <div class="card__title-sm">汇总</div>
+                <div class="card__subtle" id="metricsWindowHint">-</div>
+              </div>
+              <span class="pill pill--soft">events / users</span>
+            </div>
+            <div id="metricsSummary">
+              <div class="card__row">
+                <div class="skeleton" style="width: 52%"></div>
+                <div class="skeleton" style="width: 68%"></div>
+                <div class="skeleton" style="width: 46%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card--panel">
+            <div class="card__header">
+              <div>
+                <div class="card__title-sm">反馈</div>
+                <div class="card__subtle">event_name=feedback_submitted</div>
+              </div>
+              <span class="pill pill--soft">helpful_rate</span>
+            </div>
+            <div id="metricsFeedback">
+              <div class="card__row">
+                <div class="skeleton" style="width: 56%"></div>
+                <div class="skeleton" style="width: 62%"></div>
+                <div class="skeleton" style="width: 44%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card--panel" style="margin-top:14px;">
+          <div class="card__header">
+            <div>
+              <div class="card__title-sm">by_event_name Top10</div>
+              <div class="card__subtle">按事件名聚合（count desc）</div>
+            </div>
+            <span class="pill pill--soft">Top 10</span>
+          </div>
+          <div id="metricsByEvent" class="table-wrap" aria-label="by_event_name Top10">
+            <div class="skeleton" style="width: 72%"></div>
+            <div class="skeleton" style="width: 56%"></div>
+            <div class="skeleton" style="width: 64%"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMetrics(pageEl, seq) {
+    if (!pageEl) return;
+    pageEl.innerHTML = metricsLoadingHTML();
+
+    const form = $("#metricsForm", pageEl);
+    const fromEl = $("#metricsFrom", pageEl);
+    const toEl = $("#metricsTo", pageEl);
+    const problemIdEl = $("#metricsProblemId", pageEl);
+    const queryBtn = $("#metricsQueryBtn", pageEl);
+
+    const windowHintEl = $("#metricsWindowHint", pageEl);
+    const summaryEl = $("#metricsSummary", pageEl);
+    const feedbackEl = $("#metricsFeedback", pageEl);
+    const byEventEl = $("#metricsByEvent", pageEl);
+
+    function ensureSeq() {
+      return seq === renderSeq;
+    }
+
+    function parseMsStrict(inputValue) {
+      const raw = String(inputValue || "").trim();
+      if (!raw) return NaN;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return NaN;
+      // ms timestamp can be large; but Number still safe enough at current epoch.
+      const v = Math.floor(n);
+      return v;
+    }
+
+    function setWindowInputs(from, to) {
+      if (fromEl) fromEl.value = String(from);
+      if (toEl) toEl.value = String(to);
+    }
+
+    function renderLoading() {
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <div class="card__row">
+            <div class="skeleton" style="width: 52%"></div>
+            <div class="skeleton" style="width: 68%"></div>
+            <div class="skeleton" style="width: 46%"></div>
+          </div>
+        `;
+      }
+      if (feedbackEl) {
+        feedbackEl.innerHTML = `
+          <div class="card__row">
+            <div class="skeleton" style="width: 56%"></div>
+            <div class="skeleton" style="width: 62%"></div>
+            <div class="skeleton" style="width: 44%"></div>
+          </div>
+        `;
+      }
+      if (byEventEl) {
+        byEventEl.innerHTML = `
+          <div class="skeleton" style="width: 72%"></div>
+          <div class="skeleton" style="width: 56%"></div>
+          <div class="skeleton" style="width: 64%"></div>
+        `;
+      }
+    }
+
+    function renderByEventTable(items) {
+      if (!byEventEl) return;
+      const arr = Array.isArray(items) ? items : [];
+      const top = arr.slice(0, 10);
+      if (!top.length) {
+        byEventEl.innerHTML = `<div class="empty-hint">喵～这个时间窗里没有事件数据。</div>`;
+        return;
+      }
+      byEventEl.innerHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:64px;">#</th>
+              <th>event_name</th>
+              <th style="width:140px;">count</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${top
+              .map((it, idx) => {
+                const name = it && it.event_name !== undefined ? String(it.event_name) : "-";
+                const cnt = it && it.count !== undefined ? it.count : "-";
+                return `
+                  <tr>
+                    <td class="cell-mono">${escapeHTML(String(idx + 1))}</td>
+                    <td class="cell-mono">${escapeHTML(name)}</td>
+                    <td class="cell-mono">${escapeHTML(formatNumber(cnt))}</td>
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderData(data) {
+      if (!ensureSeq()) return;
+
+      const w = data && data.window ? data.window : null;
+      const f = data && data.filter ? data.filter : null;
+      const from = w && w.from_ts_ms !== undefined ? w.from_ts_ms : null;
+      const to = w && w.to_ts_ms !== undefined ? w.to_ts_ms : null;
+      const pid = f && f.problem_id !== undefined ? f.problem_id : "";
+
+      if (windowHintEl) {
+        const hint = `${formatDateTime(from)} ～ ${formatDateTime(to)}${
+          pid ? ` · problem_id=${String(pid)}` : ""
+        }`;
+        windowHintEl.textContent = hint;
+      }
+
+      const eventsTotal = data ? data.events_total : null;
+      const distinctUsers = data ? data.distinct_users : null;
+      const fb = data && data.feedback ? data.feedback : null;
+      const fbTotal = fb ? fb.total : null;
+      const fbHelpful = fb ? fb.helpful : null;
+      const fbRate = fb ? fb.helpful_rate : null;
+
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <div class="stats stats--2">
+            <div class="stat">
+              <div class="stat__k">events_total</div>
+              <div class="stat__v">${escapeHTML(formatNumber(eventsTotal))}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__k">distinct_users</div>
+              <div class="stat__v">${escapeHTML(formatNumber(distinctUsers))}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (feedbackEl) {
+        feedbackEl.innerHTML = `
+          <div class="stats stats--3">
+            <div class="stat">
+              <div class="stat__k">feedback.total</div>
+              <div class="stat__v">${escapeHTML(formatNumber(fbTotal))}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__k">feedback.helpful</div>
+              <div class="stat__v">${escapeHTML(formatNumber(fbHelpful))}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__k">feedback.helpful_rate</div>
+              <div class="stat__v">${escapeHTML(formatPercent01(fbRate, 1))}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      renderByEventTable(data ? data.by_event_name : []);
+    }
+
+    async function doQuery() {
+      if (!ensureSeq()) return;
+      const from = parseMsStrict(fromEl && fromEl.value ? fromEl.value : "");
+      const to = parseMsStrict(toEl && toEl.value ? toEl.value : "");
+      const problemId = (problemIdEl && problemIdEl.value ? problemIdEl.value : "").trim();
+
+      if (!Number.isFinite(from) || !Number.isFinite(to)) {
+        showToast("from_ts_ms / to_ts_ms 需要是 ms 时间戳（整数）喵～", "danger");
+        return;
+      }
+      if (from > to) {
+        showToast("from_ts_ms 不能大于 to_ts_ms 喵～", "danger");
+        return;
+      }
+
+      if (queryBtn) queryBtn.disabled = true;
+      renderLoading();
+      if (windowHintEl) windowHintEl.textContent = `${formatDateTime(from)} ～ ${formatDateTime(to)}${problemId ? ` · problem_id=${problemId}` : ""}`;
+
+      const params = new URLSearchParams();
+      params.set("from_ts_ms", String(from));
+      params.set("to_ts_ms", String(to));
+      // 保持与后端约定一致：可传空 problem_id
+      params.set("problem_id", problemId);
+
+      try {
+        const data = await apiFetch(`/admin/metrics?${params.toString()}`);
+        if (!ensureSeq()) return;
+        renderData(data);
+      } catch (err) {
+        if (!ensureSeq()) return;
+        showToast(
+          `查询失败：${String(err && err.message ? err.message : err)}`,
+          "danger"
+        );
+        if (summaryEl) {
+          summaryEl.innerHTML = `<pre class="code-block">${escapeHTML(
+            String(err && err.message ? err.message : err)
+          )}</pre>`;
+        }
+        if (feedbackEl) feedbackEl.innerHTML = `<div class="empty-hint">反馈统计暂不可用。</div>`;
+        if (byEventEl) byEventEl.innerHTML = `<div class="empty-hint">事件表暂不可用。</div>`;
+      } finally {
+        if (queryBtn) queryBtn.disabled = false;
+      }
+    }
+
+    if (form) {
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        void doQuery();
+      });
+    }
+
+    // quick window buttons
+    pageEl.addEventListener("click", (e) => {
+      const btn =
+        e.target && e.target.closest
+          ? e.target.closest("[data-metrics-quick]")
+          : null;
+      if (!btn) return;
+      const key = btn.getAttribute("data-metrics-quick") || "";
+      const now = Date.now();
+      if (key === "24h") setWindowInputs(now - 1 * DAY_MS, now);
+      else if (key === "7d") setWindowInputs(now - 7 * DAY_MS, now);
+      else if (key === "30d") setWindowInputs(now - 30 * DAY_MS, now);
+      void doQuery();
+    });
+
+    // default: last 24h and auto query
+    const now = Date.now();
+    setWindowInputs(now - 1 * DAY_MS, now);
+    void doQuery();
+  }
+
   function renderShell(route) {
     const app = $("#app");
     if (!app) return;
@@ -1386,6 +1717,10 @@
     }
     if (route === "releases") {
       renderReleases(pageRoot, seq);
+      return;
+    }
+    if (route === "metrics") {
+      renderMetrics(pageRoot, seq);
       return;
     }
 

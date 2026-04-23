@@ -258,6 +258,13 @@ input {
   gap: 12px;
 }
 
+.metrics-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .field label {
   display: block;
   font-size: 12px;
@@ -449,6 +456,14 @@ input {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+
+.stats--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stats--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .stat {
@@ -729,6 +744,15 @@ input {
   }
 
   .releases-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats--2,
+  .stats--3 {
     grid-template-columns: 1fr;
   }
 }
