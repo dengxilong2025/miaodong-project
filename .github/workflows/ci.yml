@@ -56,3 +56,61 @@ jobs:
         run: |
           cd services/api
           go test ./...
+
+  e2e-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Start dependencies (docker compose)
+        run: |
+          docker --version
+          docker compose version
+          docker compose -f infra/docker-compose.yml up -d
+          docker compose -f infra/docker-compose.yml ps
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..30}; do
+            if docker compose -f infra/docker-compose.yml exec -T postgres pg_isready -U postgres -d miaodong; then
+              echo "postgres ready"
+              exit 0
+            fi
+            echo "waiting postgres... ($i)"
+            sleep 2
+          done
+          echo "postgres not ready in time" >&2
+          exit 1
+
+      - name: Run migrations (goose)
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+        run: |
+          go install github.com/pressly/goose/v3/cmd/goose@latest
+          export PATH="$(go env GOPATH)/bin:${PATH}"
+          goose -dir services/api/migrations postgres "$MIAODONG_DSN" up
+
+      - name: Import seed (generate SQL + psql)
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+        run: |
+          cd services/api
+          go run ./cmd/seed --out /tmp/miaodong-seed.sql
+          psql "$MIAODONG_DSN" -f /tmp/miaodong-seed.sql
+          psql "$MIAODONG_DSN" -c "select count(*) as problems_count from problems;"
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f infra/docker-compose.yml down -v
