@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/http/adminui"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/http/handlers"
 )
 
@@ -25,6 +26,15 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/admin/release", handlers.AdminReleases)  // 兼容：POST
 	mux.HandleFunc("/admin/rollback", handlers.AdminRollback)
 	mux.HandleFunc("/admin/metrics", handlers.AdminMetrics)
+
+	// Admin UI（静态单页），避免与 /admin/* API 冲突：使用 /admin/ui/
+	if h, err := adminui.Handler(); err != nil {
+		mux.Handle("/admin/ui/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "admin ui not available", http.StatusInternalServerError)
+		}))
+	} else {
+		mux.Handle("/admin/ui/", h)
+	}
 
 	// problems：同时支持
 	// - GET /v1/problems
