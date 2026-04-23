@@ -31,6 +31,7 @@ echo "[package] out:  ${OUT}"
 # 解压后目录名保持为 `${PROJECT_DIR_NAME}/`，你可直接覆盖本地同名文件夹。
 zip -r "${OUT}" "${PROJECT_DIR_NAME}" \
   -x "${PROJECT_DIR_NAME}/.git/*" \
+  -x "${PROJECT_DIR_NAME}/.superpowers/*" \
   -x "${PROJECT_DIR_NAME}/.DS_Store" \
   -x "${PROJECT_DIR_NAME}/**/.DS_Store" \
   -x "${PROJECT_DIR_NAME}/**/node_modules/*" \
