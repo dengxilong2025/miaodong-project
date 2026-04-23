@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	apphttp "github.com/dengxilong2025/miaodong-project/miaodong/services/api/internal/http"
+	apphttp "github.com/dengxilong2025/miaodong-project/services/api/internal/http"
 )
 
 func main() {
@@ -24,4 +24,3 @@ func main() {
 	log.Printf("miaodong-api listening on %s", addr)
 	log.Fatal(s.ListenAndServe())
 }
-

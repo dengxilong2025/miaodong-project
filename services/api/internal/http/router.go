@@ -2,26 +2,45 @@ package http
 
 import (
 	"net/http"
+	"strings"
 
-	"github.com/dengxilong2025/miaodong-project/miaodong/services/api/internal/http/handlers"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/http/handlers"
 )
 
 func NewRouter() http.Handler {
-	r := chi.NewRouter()
-	r.Use(middleware.RealIP)
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Recoverer)
+	mux := http.NewServeMux()
 
-	r.Route("/v1", func(v1 chi.Router) {
-		v1.Get("/health", handlers.Health)
-		v1.Post("/auth/anonymous", handlers.AnonymousAuth)
+	// 基础健康检查
+	mux.HandleFunc("/v1/health", handlers.Health)
+	mux.HandleFunc("/v1/auth/anonymous", handlers.AnonymousAuth)
 
-		v1.Get("/problems", handlers.ListProblems)
-		v1.Get("/problems/{id}", handlers.GetProblem)
+	// problems：同时支持
+	// - GET /v1/problems
+	// - GET /v1/problems/{id}
+	mux.HandleFunc("/v1/problems", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/problems" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handlers.ListProblems(w, r)
+	})
+	mux.HandleFunc("/v1/problems/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		// 约定：id 为路径最后一段
+		id := strings.TrimPrefix(r.URL.Path, "/v1/problems/")
+		if id == "" {
+			http.NotFound(w, r)
+			return
+		}
+		handlers.GetProblemByID(w, r, id)
 	})
 
-	return r
+	return mux
 }
-

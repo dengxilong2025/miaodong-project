@@ -1,11 +1,11 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // AnonymousAuth 是MVP阶段的游客态入口：
@@ -16,7 +16,7 @@ import (
 func AnonymousAuth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	userID := "u_" + uuid.NewString()
+	userID := "u_" + randHex(16)
 	expiresIn := int64(30 * 24 * 3600)
 
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -27,3 +27,8 @@ func AnonymousAuth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+func randHex(nBytes int) string {
+	b := make([]byte, nBytes)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}

@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/dengxilong2025/miaodong-project/miaodong/services/api/internal/content"
-	"github.com/go-chi/chi/v5"
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/content"
 )
 
 func ListProblems(w http.ResponseWriter, r *http.Request) {
@@ -24,10 +23,8 @@ func ListProblems(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"items": seed.Problems})
 }
 
-func GetProblem(w http.ResponseWriter, r *http.Request) {
+func GetProblemByID(w http.ResponseWriter, r *http.Request, id string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	id := chi.URLParam(r, "id")
 	seedPath, err := content.DefaultSeedPath()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -46,4 +43,3 @@ func GetProblem(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Error(w, "not found", http.StatusNotFound)
 }
-
