@@ -13,6 +13,10 @@ func NewRouter() http.Handler {
 	// 基础健康检查
 	mux.HandleFunc("/v1/health", handlers.Health)
 	mux.HandleFunc("/v1/auth/anonymous", handlers.AnonymousAuth)
+	mux.HandleFunc("/v1/audio/upload-url", handlers.AudioUploadURL)
+	mux.HandleFunc("/v1/audio/upload/", handlers.AudioUploadByID) // PUT
+	mux.HandleFunc("/v1/audio/", handlers.AudioGetByID)           // GET
+	mux.HandleFunc("/v1/inference", handlers.Inference)           // POST
 
 	// problems：同时支持
 	// - GET /v1/problems
