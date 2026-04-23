@@ -303,6 +303,95 @@
     `;
   }
 
+  function renderAudit(pageEl, seq) {
+    // seq kept for future async loading; for now it is a pure placeholder.
+    if (!pageEl) return;
+    pageEl.innerHTML = `
+      <div class="page">
+        <div class="card card--welcome audit-empty">
+          <div class="card__kawaii" aria-hidden="true">
+            <span class="sparkle"></span>
+            <span class="sparkle"></span>
+            <span class="sparkle"></span>
+          </div>
+
+          <div class="audit-empty__hero">
+            <div class="audit-empty__illust" aria-hidden="true">
+              ${auditCatSVG()}
+            </div>
+            <div class="audit-empty__text">
+              <h1 class="card__title">Audit · 操作日志</h1>
+              <p class="card__desc">
+                喵～这里会展示后台关键操作的审计记录（发布/回滚/编辑等）。
+                v0.1 先放一个可爱空态占位，避免你找不到入口～
+              </p>
+            </div>
+          </div>
+
+          <div class="audit-empty__tips" role="note" aria-label="提示">
+            <div class="pill pill--soft">后端已写入 audit_log</div>
+            <div class="pill pill--soft">后续计划：GET /admin/audit</div>
+            <div class="pill pill--soft">UI 路径：/admin/ui/#/audit</div>
+          </div>
+
+          <div class="audit-empty__actions">
+            <button class="btn btn--ghost" type="button" id="auditRefreshBtn" disabled>
+              刷新（即将上线）
+            </button>
+            <a class="btn btn--primary" href="#/releases">去 Releases 看看</a>
+          </div>
+
+          <div class="code-block" style="margin-top:14px;">
+-- 临时查看方式（开发/排障）：直接查表 audit_log
+-- e.g. SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 50;
+          </div>
+        </div>
+      </div>
+    `;
+
+    // keep a tiny interaction so the empty state feels alive
+    const refreshBtn = $("#auditRefreshBtn", pageEl);
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => {
+        // should not be clickable (disabled), but keep for completeness
+        if (seq !== renderSeq) return;
+        showToast("Audit 接口还在路上～再等等喵！", "danger");
+      });
+    }
+  }
+
+  function auditCatSVG() {
+    // inline SVG: cute, no external assets
+    return `
+      <svg class="audit-cat" viewBox="0 0 180 140" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FF8FB1" stop-opacity="0.22"/>
+            <stop offset="1" stop-color="#6FD3B8" stop-opacity="0.18"/>
+          </linearGradient>
+        </defs>
+        <path d="M36 50 L18 22 C14 16 20 10 26 14 L52 30" fill="url(#g1)" stroke="rgba(139,107,93,.45)" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M144 50 L162 22 C166 16 160 10 154 14 L128 30" fill="url(#g1)" stroke="rgba(139,107,93,.45)" stroke-width="3" stroke-linejoin="round"/>
+        <ellipse cx="90" cy="74" rx="62" ry="54" fill="rgba(255,255,255,.82)" stroke="rgba(139,107,93,.45)" stroke-width="3"/>
+        <ellipse cx="66" cy="70" rx="7.8" ry="10" fill="rgba(58,44,41,.9)"/>
+        <ellipse cx="114" cy="70" rx="7.8" ry="10" fill="rgba(58,44,41,.9)"/>
+        <circle cx="63" cy="67" r="2.2" fill="#fff"/>
+        <circle cx="111" cy="67" r="2.2" fill="#fff"/>
+        <path d="M90 80 C86 84 84 86 90 90 C96 86 94 84 90 80Z" fill="rgba(255,143,177,.75)" stroke="rgba(139,107,93,.45)" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M76 94 C82 102 98 102 104 94" fill="none" stroke="rgba(139,107,93,.45)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M34 84 C52 78 62 78 72 84" fill="none" stroke="rgba(255,143,177,.35)" stroke-width="6" stroke-linecap="round"/>
+        <path d="M108 84 C118 78 128 78 146 84" fill="none" stroke="rgba(255,143,177,.35)" stroke-width="6" stroke-linecap="round"/>
+        <path d="M30 78 L60 86" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M30 94 L60 90" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M150 78 L120 86" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
+        <path d="M150 94 L120 90" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="40" cy="46" r="5" fill="rgba(255,143,177,.28)"/>
+        <circle cx="146" cy="44" r="4" fill="rgba(111,211,184,.22)"/>
+        <circle cx="26" cy="64" r="3" fill="rgba(255,93,108,.18)"/>
+      </svg>
+    `;
+  }
+
   function dashboardLoadingHTML() {
     return `
       <div class="page page--wide">
@@ -1721,6 +1810,10 @@
     }
     if (route === "metrics") {
       renderMetrics(pageRoot, seq);
+      return;
+    }
+    if (route === "audit") {
+      renderAudit(pageRoot, seq);
       return;
     }
 

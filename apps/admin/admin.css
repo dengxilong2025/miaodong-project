@@ -502,6 +502,58 @@ input {
   overflow: hidden;
 }
 
+.audit-empty__hero {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.audit-empty__illust {
+  flex: 0 0 auto;
+  width: 160px;
+  height: 120px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  border: 1px dashed color-mix(in srgb, var(--secondary) 18%, transparent);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 12px 26px rgba(255, 143, 177, 0.10), var(--shadow-inset);
+}
+
+.audit-cat {
+  width: 140px;
+  height: 110px;
+}
+
+.audit-empty__text {
+  min-width: 0;
+}
+
+.audit-empty__tips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 12px;
+}
+
+.audit-empty__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 760px) {
+  .audit-empty__hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .audit-empty__illust {
+    width: 100%;
+  }
+}
+
 .card__kawaii {
   position: absolute;
   inset: -40px -60px auto auto;

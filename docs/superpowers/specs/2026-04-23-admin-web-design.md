@@ -37,7 +37,8 @@
   - `admin.css`
   - `admin.js`
 - 不依赖 Node/Vite/React，便于你“解压覆盖”交付与部署。
-- 静态资源由 Go API 托管（推荐路径：`/admin/`），或直接用任意静态服务器托管也可。
+- 静态资源由 Go API 托管（**UI 访问路径固定为：`/admin/ui/`**），或直接用任意静态服务器托管也可。
+  - 说明：`/admin/*` 已用于 Admin API（如 `/admin/problems`、`/admin/releases`），UI 使用 `/admin/ui/` 以避免与 API 路径冲突。
 
 ### 3.2 与后端的契约
 
@@ -211,4 +212,3 @@ UI：
 4) Metrics：能看到最近 7 天摘要、可按 problem_id 筛选 feedback 指标  
 5) 关键动作均有二次确认  
 6) CI 仍全绿（go-api / python-inference / e2e-db）
-
