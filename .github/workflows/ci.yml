@@ -34,11 +34,11 @@ jobs:
 
       - name: Install deps
         run: |
-          python -m pip install -r miaodong/services/inference/requirements.txt
+          python -m pip install -r services/inference/requirements.txt
 
       - name: Pytest
         run: |
-          cd miaodong/services/inference
+          cd services/inference
           pytest -q
 
   go-api:
@@ -54,5 +54,5 @@ jobs:
 
       - name: Go test
         run: |
-          cd miaodong/services/api
+          cd services/api
           go test ./...
