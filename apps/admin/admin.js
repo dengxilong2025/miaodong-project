@@ -12,6 +12,8 @@
     "metrics",
     "audit",
   ]);
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  let renderSeq = 0;
 
   function $(sel, root) {
     return (root || document).querySelector(sel);
@@ -51,6 +53,41 @@
       el.style.transition = "opacity 180ms ease";
       window.setTimeout(() => el.remove(), 220);
     }, 2400);
+  }
+
+  function formatDateTime(ts) {
+    if (!ts) return "-";
+    const d = ts instanceof Date ? ts : new Date(ts);
+    if (Number.isNaN(d.getTime())) return String(ts);
+    return d.toLocaleString("zh-CN", { hour12: false });
+  }
+
+  function formatNumber(n) {
+    if (n === null || n === undefined || n === "") return "-";
+    const v = typeof n === "number" ? n : Number(n);
+    if (Number.isNaN(v)) return String(n);
+    return new Intl.NumberFormat("zh-CN").format(v);
+  }
+
+  function formatPercent01(v, digits) {
+    if (v === null || v === undefined || v === "") return "-";
+    const n = typeof v === "number" ? v : Number(v);
+    if (Number.isNaN(n)) return String(v);
+    const p = Math.max(0, Math.min(1, n)) * 100;
+    return `${p.toFixed(typeof digits === "number" ? digits : 1)}%`;
+  }
+
+  async function loadDashboard() {
+    const now = Date.now();
+    const from = now - 7 * DAY_MS;
+    const [releases, metrics] = await Promise.all([
+      apiFetch("/admin/releases"),
+      apiFetch(`/admin/metrics?from_ts_ms=${from}&to_ts_ms=${now}`),
+    ]);
+
+    const items = releases && typeof releases === "object" ? releases.items : [];
+    const latest = Array.isArray(items) && items.length ? items[0] : null;
+    return { latestRelease: latest, metrics, window: { from, to: now } };
   }
 
   function parseRouteFromHash() {
@@ -232,6 +269,197 @@
     }
   }
 
+  function renderPlaceholder(pageEl, meta) {
+    if (!pageEl) return;
+    pageEl.innerHTML = `
+      <div class="card card--welcome">
+        <div class="card__kawaii" aria-hidden="true">
+          <span class="sparkle"></span>
+          <span class="sparkle"></span>
+          <span class="sparkle"></span>
+        </div>
+        <h1 class="card__title">${escapeHTML(meta.title)}</h1>
+        <p class="card__desc">${escapeHTML(meta.desc)}</p>
+        <div class="card__row">
+          <div class="skeleton" style="width: 48%"></div>
+          <div class="skeleton" style="width: 72%"></div>
+          <div class="skeleton" style="width: 58%"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function dashboardLoadingHTML() {
+    return `
+      <div class="page page--wide">
+        <div class="grid">
+          <div class="card card--panel">
+            <div class="card__header">
+              <div>
+                <div class="card__title-sm">最新发布</div>
+                <div class="card__subtle">正在抓取最新版本…</div>
+              </div>
+            </div>
+            <div class="card__row">
+              <div class="skeleton" style="width: 52%"></div>
+              <div class="skeleton" style="width: 70%"></div>
+              <div class="skeleton" style="width: 46%"></div>
+            </div>
+          </div>
+          <div class="card card--panel">
+            <div class="card__header">
+              <div>
+                <div class="card__title-sm">最近 7 天摘要</div>
+                <div class="card__subtle">指标汇总生成中…</div>
+              </div>
+            </div>
+            <div class="card__row">
+              <div class="skeleton" style="width: 58%"></div>
+              <div class="skeleton" style="width: 64%"></div>
+              <div class="skeleton" style="width: 44%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderDashboard(pageEl, seq) {
+    if (!pageEl) return;
+    pageEl.innerHTML = dashboardLoadingHTML();
+
+    loadDashboard()
+      .then(({ latestRelease, metrics, window: w }) => {
+        if (seq !== renderSeq) return; // route changed
+
+        const rel = latestRelease;
+        const contentVersion = rel ? rel.content_version : null;
+        const rolloutPercent = rel ? rel.rollout_percent : null;
+        const createdBy = rel ? rel.created_by : null;
+        const createdAt = rel ? rel.created_at : null;
+
+        const eventsTotal = metrics ? metrics.events_total : null;
+        const distinctUsers = metrics ? metrics.distinct_users : null;
+        const helpfulRate =
+          metrics && metrics.feedback ? metrics.feedback.helpful_rate : null;
+
+        const emptyRel = !rel;
+        const emptyMetrics = !metrics;
+
+        pageEl.innerHTML = `
+          <div class="page page--wide">
+            <div class="grid">
+              <div class="card card--panel">
+                <div class="card__header">
+                  <div>
+                    <div class="card__title-sm">最新发布</div>
+                    <div class="card__subtle">Release · 版本与灰度状态</div>
+                  </div>
+                  ${
+                    emptyRel
+                      ? `<span class="pill pill--soft">暂无发布记录</span>`
+                      : `<span class="pill pill--soft">#${escapeHTML(
+                          String(contentVersion)
+                        )}</span>`
+                  }
+                </div>
+
+                ${
+                  emptyRel
+                    ? `<div class="empty-hint">喵～目前还没有发布记录。可以先去 Releases 页面发布一个版本～</div>`
+                    : `
+                      <div class="kv">
+                        <div class="kv__row">
+                          <div class="kv__k">content_version</div>
+                          <div class="kv__v">${escapeHTML(
+                            String(contentVersion)
+                          )}</div>
+                        </div>
+                        <div class="kv__row">
+                          <div class="kv__k">rollout_percent</div>
+                          <div class="kv__v">${escapeHTML(
+                            String(rolloutPercent)
+                          )}%</div>
+                        </div>
+                        <div class="kv__row">
+                          <div class="kv__k">created_by</div>
+                          <div class="kv__v">${escapeHTML(
+                            createdBy || "-"
+                          )}</div>
+                        </div>
+                        <div class="kv__row">
+                          <div class="kv__k">created_at</div>
+                          <div class="kv__v">${escapeHTML(
+                            formatDateTime(createdAt)
+                          )}</div>
+                        </div>
+                      </div>
+                    `
+                }
+              </div>
+
+              <div class="card card--panel">
+                <div class="card__header">
+                  <div>
+                    <div class="card__title-sm">最近 7 天摘要</div>
+                    <div class="card__subtle">Metrics · ${escapeHTML(
+                      formatDateTime(w.from)
+                    )} ～ ${escapeHTML(formatDateTime(w.to))}</div>
+                  </div>
+                  <span class="pill pill--soft">默认窗口</span>
+                </div>
+
+                ${
+                  emptyMetrics
+                    ? `<div class="empty-hint">喵～暂时没有取到指标数据。</div>`
+                    : `
+                      <div class="stats">
+                        <div class="stat">
+                          <div class="stat__k">events_total</div>
+                          <div class="stat__v">${escapeHTML(
+                            formatNumber(eventsTotal)
+                          )}</div>
+                        </div>
+                        <div class="stat">
+                          <div class="stat__k">distinct_users</div>
+                          <div class="stat__v">${escapeHTML(
+                            formatNumber(distinctUsers)
+                          )}</div>
+                        </div>
+                        <div class="stat">
+                          <div class="stat__k">feedback.helpful_rate</div>
+                          <div class="stat__v">${escapeHTML(
+                            formatPercent01(helpfulRate, 1)
+                          )}</div>
+                        </div>
+                      </div>
+                    `
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .catch((err) => {
+        if (seq !== renderSeq) return;
+        showToast(`Dashboard 加载失败：${String(err && err.message ? err.message : err)}`, "danger");
+        pageEl.innerHTML = `
+          <div class="card card--welcome">
+            <div class="card__kawaii" aria-hidden="true">
+              <span class="sparkle"></span>
+              <span class="sparkle"></span>
+              <span class="sparkle"></span>
+            </div>
+            <h1 class="card__title">Dashboard 加载失败</h1>
+            <p class="card__desc">喵…可能是网络/口令/服务端出了一点小状况。稍后刷新试试，或重新登录～</p>
+            <pre class="code-block">${escapeHTML(
+              String(err && err.message ? err.message : err)
+            )}</pre>
+          </div>
+        `;
+      });
+  }
+
   function renderShell(route) {
     const app = $("#app");
     if (!app) return;
@@ -264,20 +492,7 @@
           </header>
 
           <section class="content" aria-label="内容区">
-            <div class="card card--welcome">
-              <div class="card__kawaii" aria-hidden="true">
-                <span class="sparkle"></span>
-                <span class="sparkle"></span>
-                <span class="sparkle"></span>
-              </div>
-              <h1 class="card__title">${escapeHTML(meta.title)}</h1>
-              <p class="card__desc">${escapeHTML(meta.desc)}</p>
-              <div class="card__row">
-                <div class="skeleton" style="width: 48%"></div>
-                <div class="skeleton" style="width: 72%"></div>
-                <div class="skeleton" style="width: 58%"></div>
-              </div>
-            </div>
+            <div id="pageRoot"></div>
           </section>
         </main>
       </div>
@@ -290,6 +505,9 @@
         logoutAndGoLogin("已登出～要继续的话，再输入一次口令喵！");
       });
     }
+
+    const pageRoot = $("#pageRoot", app);
+    if (pageRoot) renderPlaceholder(pageRoot, meta);
   }
 
   function renderRoute() {
@@ -301,7 +519,22 @@
 
     const route = parseRouteFromHash() || DEFAULT_ROUTE;
     if (!parseRouteFromHash()) window.location.hash = `#/${route}`;
+
+    renderSeq++;
     renderShell(route);
+
+    const app = $("#app");
+    const pageRoot = app ? $("#pageRoot", app) : null;
+
+    if (!pageRoot) return;
+
+    const seq = renderSeq;
+    if (route === "dashboard") {
+      renderDashboard(pageRoot, seq);
+      return;
+    }
+
+    renderPlaceholder(pageRoot, routeMeta(route));
   }
 
   function init() {
