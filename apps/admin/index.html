@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>喵懂 · 运营后台</title>
+    <link rel="stylesheet" href="./admin.css" />
+  </head>
+  <body>
+    <div id="app" class="app">
+      <div class="app-shell" role="application" aria-label="喵懂运营后台">
+        <aside class="sidebar" aria-label="侧边栏">
+          <div class="sidebar__brand">
+            <div class="brand-mark" aria-hidden="true">喵</div>
+            <div class="brand-text">
+              <div class="brand-title">喵懂</div>
+              <div class="brand-subtitle">Admin</div>
+            </div>
+          </div>
+
+          <nav class="nav" aria-label="导航">
+            <a class="nav__item is-active" href="#/dashboard">Dashboard</a>
+            <a class="nav__item" href="#/problems">Problems</a>
+            <a class="nav__item" href="#/releases">Releases</a>
+            <a class="nav__item" href="#/metrics">Metrics</a>
+          </nav>
+
+          <div class="sidebar__footer">
+            <span class="pill pill--soft">奶油系 · 施工中</span>
+          </div>
+        </aside>
+
+        <main class="main" aria-label="主内容">
+          <header class="topbar">
+            <div class="topbar__title">欢迎来到运营后台</div>
+            <div class="topbar__actions">
+              <button class="btn btn--ghost" type="button" disabled>设置</button>
+            </div>
+          </header>
+
+          <section class="content" aria-label="内容区">
+            <div class="card card--welcome" role="status" aria-live="polite">
+              <div class="card__kawaii" aria-hidden="true">
+                <span class="sparkle"></span>
+                <span class="sparkle"></span>
+                <span class="sparkle"></span>
+              </div>
+              <h1 class="card__title">欢迎～</h1>
+              <p class="card__desc">加载中… 请稍等一下下</p>
+              <div class="card__row">
+                <div class="skeleton" style="width: 42%"></div>
+                <div class="skeleton" style="width: 64%"></div>
+                <div class="skeleton" style="width: 56%"></div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="./admin.js"></script>
+  </body>
+</html>
