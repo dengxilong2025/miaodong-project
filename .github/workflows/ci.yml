@@ -155,35 +155,35 @@ jobs:
 
           # Read audit list and assert fields
           AUDIT_JSON="$(curl -fsS "${API_URL}/admin/audit?limit=10" -H "X-Admin-Token: ${ADMIN_TOKEN}")"
-          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" AUDIT_JSON="${AUDIT_JSON}" python3 - <<-'PY'
-          			import json, os, subprocess
-          			
-          			api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
-          			admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
-          			audit_json = os.environ["AUDIT_JSON"]
-          			
-          			data = json.loads(audit_json)
-          			items = data.get("items")
-          			if not isinstance(items, list) or len(items) < 1:
-          				raise SystemExit(f"expected items>=1, got: {items!r}")
-          			
-          			need = ["id", "actor", "action", "entity_type", "created_at"]
-          			for k in need:
-          				if k not in items[0]:
-          					raise SystemExit(f"missing field {k} in first item: {items[0]}")
-          			
-          			next_cursor = data.get("next_cursor")
-          			if next_cursor is not None:
-          				# verify requesting cursor does not error
-          				url = f"{api_url}/admin/audit?limit=10&cursor={next_cursor}"
-          				out = subprocess.check_output(
-          					["curl", "-fsS", url, "-H", f"X-Admin-Token: {admin_token}"],
-          					text=True,
-          				)
-          				json.loads(out)
-          			
-          			print("E2E audit log: OK")
-          			PY
+          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" AUDIT_JSON="${AUDIT_JSON}" python3 - <<'PY'
+          import json, os, subprocess
+          
+          api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
+          admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
+          audit_json = os.environ["AUDIT_JSON"]
+          
+          data = json.loads(audit_json)
+          items = data.get("items")
+          if not isinstance(items, list) or len(items) < 1:
+            raise SystemExit(f"expected items>=1, got: {items!r}")
+          
+          need = ["id", "actor", "action", "entity_type", "created_at"]
+          for k in need:
+            if k not in items[0]:
+              raise SystemExit(f"missing field {k} in first item: {items[0]}")
+          
+          next_cursor = data.get("next_cursor")
+          if next_cursor is not None:
+            # verify requesting cursor does not error
+            url = f"{api_url}/admin/audit?limit=10&cursor={next_cursor}"
+            out = subprocess.check_output(
+              ["curl", "-fsS", url, "-H", f"X-Admin-Token: {admin_token}"],
+              text=True,
+            )
+            json.loads(out)
+          
+          print("E2E audit log: OK")
+          PY
 
       - name: Tear down
         if: always()
