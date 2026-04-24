@@ -484,6 +484,56 @@ input {
   font-weight: 920;
 }
 
+.stat__delta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.delta {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta-up {
+  color: color-mix(in srgb, var(--success) 70%, var(--text) 30%);
+}
+
+.delta-down {
+  color: color-mix(in srgb, var(--danger) 70%, var(--text) 30%);
+}
+
+.delta-flat {
+  color: var(--muted);
+}
+
+/* === Metrics Compare (Dashboard) === */
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.compare-card {
+  position: relative;
+}
+
+.compare-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 10px;
+}
+
+@media (max-width: 760px) {
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .code-block {
   margin: 12px 0 0;
   padding: 12px;
@@ -495,6 +545,21 @@ input {
   word-break: break-word;
   font-size: 12px;
   color: color-mix(in srgb, var(--text) 90%, #000000 10%);
+}
+
+/* === Audit diff folding === */
+.diff-details {
+  width: 100%;
+}
+
+.diff-summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.diff-pre {
+  margin-top: 8px;
 }
 
 .card--welcome {

@@ -1,9 +1,30 @@
 // 喵懂 Admin Web (Vanilla JS, no build chain)
-// Task 3: token login + X-Admin-Token injection + hash routing + 401 auto logout
+// Entry: routing + shell + dispatch (no bundler; shared logic in lib/ and pages/)
 (function () {
   "use strict";
 
-  const LS_TOKEN_KEY = "miaodong_admin_token";
+  const AdminLib = window.AdminLib;
+  if (!AdminLib) {
+    throw new Error("AdminLib is missing: ensure ./lib/api.js is loaded first");
+  }
+
+  const {
+    $,
+    escapeHTML,
+    getToken,
+    setToken,
+    clearToken,
+    apiFetch,
+    showToast,
+    openModal,
+    formatDateTime,
+    formatNumber,
+    formatPercent01,
+    tagsArrayToInput,
+    tagsInputToArray,
+    setUnauthorizedHandler,
+  } = AdminLib;
+
   const DEFAULT_ROUTE = "dashboard";
   const ROUTES = /** @type {const} */ ([
     "dashboard",
@@ -14,92 +35,6 @@
   ]);
   const DAY_MS = 24 * 60 * 60 * 1000;
   let renderSeq = 0;
-
-  function $(sel, root) {
-    return (root || document).querySelector(sel);
-  }
-
-  function escapeHTML(s) {
-    return String(s)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function getToken() {
-    return localStorage.getItem(LS_TOKEN_KEY) || "";
-  }
-  function setToken(t) {
-    localStorage.setItem(LS_TOKEN_KEY, t);
-  }
-  function clearToken() {
-    localStorage.removeItem(LS_TOKEN_KEY);
-  }
-
-  function showToast(message, variant) {
-    const el = document.createElement("div");
-    el.className = ["toast", variant ? `toast--${variant}` : ""]
-      .filter(Boolean)
-      .join(" ");
-    el.setAttribute("role", "status");
-    el.setAttribute("aria-live", "polite");
-    el.textContent = message;
-
-    document.body.appendChild(el);
-    window.setTimeout(() => {
-      el.style.opacity = "0";
-      el.style.transition = "opacity 180ms ease";
-      window.setTimeout(() => el.remove(), 220);
-    }, 2400);
-  }
-
-  function formatDateTime(ts) {
-    if (!ts) return "-";
-    const d = ts instanceof Date ? ts : new Date(ts);
-    if (Number.isNaN(d.getTime())) return String(ts);
-    return d.toLocaleString("zh-CN", { hour12: false });
-  }
-
-  function formatNumber(n) {
-    if (n === null || n === undefined || n === "") return "-";
-    const v = typeof n === "number" ? n : Number(n);
-    if (Number.isNaN(v)) return String(n);
-    return new Intl.NumberFormat("zh-CN").format(v);
-  }
-
-  function formatPercent01(v, digits) {
-    if (v === null || v === undefined || v === "") return "-";
-    const n = typeof v === "number" ? v : Number(v);
-    if (Number.isNaN(n)) return String(v);
-    const p = Math.max(0, Math.min(1, n)) * 100;
-    return `${p.toFixed(typeof digits === "number" ? digits : 1)}%`;
-  }
-
-  function tagsArrayToInput(tags) {
-    return Array.isArray(tags) ? tags.filter(Boolean).join(", ") : "";
-  }
-
-  function tagsInputToArray(s) {
-    return String(s || "")
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-  }
-
-  async function loadDashboard() {
-    const now = Date.now();
-    const from = now - 7 * DAY_MS;
-    const [releases, metrics] = await Promise.all([
-      apiFetch("/admin/releases"),
-      apiFetch(`/admin/metrics?from_ts_ms=${from}&to_ts_ms=${now}`),
-    ]);
-
-    const items = releases && typeof releases === "object" ? releases.items : [];
-    const latest = Array.isArray(items) && items.length ? items[0] : null;
-    return { latestRelease: latest, metrics, window: { from, to: now } };
-  }
 
   function parseRouteFromHash() {
     const h = window.location.hash || "";
@@ -118,34 +53,6 @@
     // keep hash simple; login page does not need routing for now
     window.location.hash = "";
     renderLogin(reason || "已退出～下次再来玩也欢迎喵！");
-  }
-
-  async function apiFetch(path, { method = "GET", body } = {}) {
-    const headers = {};
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    const token = getToken();
-    if (token) headers["X-Admin-Token"] = token;
-
-    const res = await fetch(path, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-
-    if (res.status === 401) {
-      showToast("口令好像不对喵…请重新登录～", "danger");
-      logoutAndGoLogin("口令无效或已过期，请重新输入～");
-      throw new Error("unauthorized");
-    }
-
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(txt || `request failed: ${res.status}`);
-    }
-
-    const ct = res.headers.get("content-type") || "";
-    if (ct.includes("application/json")) return await res.json();
-    return await res.text();
   }
 
   function renderLogin(hint) {
@@ -262,7 +169,7 @@
       case "dashboard":
         return {
           title: "Dashboard",
-          desc: "今日份概览准备中～（先放个占位卡片喵）",
+          desc: "发布后 24h / 72h 指标对比 + 最新发布概览",
         };
       case "problems":
         return {
@@ -277,7 +184,7 @@
           desc: "指标查询：时间窗/Problem 过滤 + Top10 事件统计 + 反馈帮助率",
         };
       case "audit":
-        return { title: "Audit", desc: "喵～日志页即将上线，先喝口奶茶等一下～" };
+        return { title: "Audit", desc: "审计日志：最近 200 条操作记录 + 本地过滤" };
       default:
         return { title: "Unknown", desc: "咦？这页迷路了…我们回 Dashboard 吧～" };
     }
@@ -304,92 +211,16 @@
   }
 
   function renderAudit(pageEl, seq) {
-    // seq kept for future async loading; for now it is a pure placeholder.
     if (!pageEl) return;
-    pageEl.innerHTML = `
-      <div class="page">
-        <div class="card card--welcome audit-empty">
-          <div class="card__kawaii" aria-hidden="true">
-            <span class="sparkle"></span>
-            <span class="sparkle"></span>
-            <span class="sparkle"></span>
-          </div>
-
-          <div class="audit-empty__hero">
-            <div class="audit-empty__illust" aria-hidden="true">
-              ${auditCatSVG()}
-            </div>
-            <div class="audit-empty__text">
-              <h1 class="card__title">Audit · 操作日志</h1>
-              <p class="card__desc">
-                喵～这里会展示后台关键操作的审计记录（发布/回滚/编辑等）。
-                v0.1 先放一个可爱空态占位，避免你找不到入口～
-              </p>
-            </div>
-          </div>
-
-          <div class="audit-empty__tips" role="note" aria-label="提示">
-            <div class="pill pill--soft">后端已写入 audit_log</div>
-            <div class="pill pill--soft">后续计划：GET /admin/audit</div>
-            <div class="pill pill--soft">UI 路径：/admin/ui/#/audit</div>
-          </div>
-
-          <div class="audit-empty__actions">
-            <button class="btn btn--ghost" type="button" id="auditRefreshBtn" disabled>
-              刷新（即将上线）
-            </button>
-            <a class="btn btn--primary" href="#/releases">去 Releases 看看</a>
-          </div>
-
-          <div class="code-block" style="margin-top:14px;">
--- 临时查看方式（开发/排障）：直接查表 audit_log
--- e.g. SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 50;
-          </div>
-        </div>
-      </div>
-    `;
-
-    // keep a tiny interaction so the empty state feels alive
-    const refreshBtn = $("#auditRefreshBtn", pageEl);
-    if (refreshBtn) {
-      refreshBtn.addEventListener("click", () => {
-        // should not be clickable (disabled), but keep for completeness
-        if (seq !== renderSeq) return;
-        showToast("Audit 接口还在路上～再等等喵！", "danger");
-      });
+    const p = window.AdminPages && window.AdminPages.audit;
+    if (p && typeof p.render === "function") {
+      p.render(pageEl, { ensureActive: () => seq === renderSeq });
+      return;
     }
-  }
-
-  function auditCatSVG() {
-    // inline SVG: cute, no external assets
-    return `
-      <svg class="audit-cat" viewBox="0 0 180 140" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#FF8FB1" stop-opacity="0.22"/>
-            <stop offset="1" stop-color="#6FD3B8" stop-opacity="0.18"/>
-          </linearGradient>
-        </defs>
-        <path d="M36 50 L18 22 C14 16 20 10 26 14 L52 30" fill="url(#g1)" stroke="rgba(139,107,93,.45)" stroke-width="3" stroke-linejoin="round"/>
-        <path d="M144 50 L162 22 C166 16 160 10 154 14 L128 30" fill="url(#g1)" stroke="rgba(139,107,93,.45)" stroke-width="3" stroke-linejoin="round"/>
-        <ellipse cx="90" cy="74" rx="62" ry="54" fill="rgba(255,255,255,.82)" stroke="rgba(139,107,93,.45)" stroke-width="3"/>
-        <ellipse cx="66" cy="70" rx="7.8" ry="10" fill="rgba(58,44,41,.9)"/>
-        <ellipse cx="114" cy="70" rx="7.8" ry="10" fill="rgba(58,44,41,.9)"/>
-        <circle cx="63" cy="67" r="2.2" fill="#fff"/>
-        <circle cx="111" cy="67" r="2.2" fill="#fff"/>
-        <path d="M90 80 C86 84 84 86 90 90 C96 86 94 84 90 80Z" fill="rgba(255,143,177,.75)" stroke="rgba(139,107,93,.45)" stroke-width="2" stroke-linejoin="round"/>
-        <path d="M76 94 C82 102 98 102 104 94" fill="none" stroke="rgba(139,107,93,.45)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M34 84 C52 78 62 78 72 84" fill="none" stroke="rgba(255,143,177,.35)" stroke-width="6" stroke-linecap="round"/>
-        <path d="M108 84 C118 78 128 78 146 84" fill="none" stroke="rgba(255,143,177,.35)" stroke-width="6" stroke-linecap="round"/>
-        <path d="M30 78 L60 86" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M30 94 L60 90" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M150 78 L120 86" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M150 94 L120 90" stroke="rgba(139,107,93,.35)" stroke-width="3" stroke-linecap="round"/>
-        <circle cx="40" cy="46" r="5" fill="rgba(255,143,177,.28)"/>
-        <circle cx="146" cy="44" r="4" fill="rgba(111,211,184,.22)"/>
-        <circle cx="26" cy="64" r="3" fill="rgba(255,93,108,.18)"/>
-      </svg>
-    `;
+    renderPlaceholder(pageEl, {
+      title: "Audit",
+      desc: "Audit 模块未加载（请检查 pages/audit.js 是否正确引入）",
+    });
   }
 
   function dashboardLoadingHTML() {
@@ -429,138 +260,15 @@
 
   function renderDashboard(pageEl, seq) {
     if (!pageEl) return;
-    pageEl.innerHTML = dashboardLoadingHTML();
-
-    loadDashboard()
-      .then(({ latestRelease, metrics, window: w }) => {
-        if (seq !== renderSeq) return; // route changed
-
-        const rel = latestRelease;
-        const contentVersion = rel ? rel.content_version : null;
-        const rolloutPercent = rel ? rel.rollout_percent : null;
-        const createdBy = rel ? rel.created_by : null;
-        const createdAt = rel ? rel.created_at : null;
-
-        const eventsTotal = metrics ? metrics.events_total : null;
-        const distinctUsers = metrics ? metrics.distinct_users : null;
-        const helpfulRate =
-          metrics && metrics.feedback ? metrics.feedback.helpful_rate : null;
-
-        const emptyRel = !rel;
-        const emptyMetrics = !metrics;
-
-        pageEl.innerHTML = `
-          <div class="page page--wide">
-            <div class="grid">
-              <div class="card card--panel">
-                <div class="card__header">
-                  <div>
-                    <div class="card__title-sm">最新发布</div>
-                    <div class="card__subtle">Release · 版本与灰度状态</div>
-                  </div>
-                  ${
-                    emptyRel
-                      ? `<span class="pill pill--soft">暂无发布记录</span>`
-                      : `<span class="pill pill--soft">#${escapeHTML(
-                          String(contentVersion)
-                        )}</span>`
-                  }
-                </div>
-
-                ${
-                  emptyRel
-                    ? `<div class="empty-hint">喵～目前还没有发布记录。可以先去 Releases 页面发布一个版本～</div>`
-                    : `
-                      <div class="kv">
-                        <div class="kv__row">
-                          <div class="kv__k">content_version</div>
-                          <div class="kv__v">${escapeHTML(
-                            String(contentVersion)
-                          )}</div>
-                        </div>
-                        <div class="kv__row">
-                          <div class="kv__k">rollout_percent</div>
-                          <div class="kv__v">${escapeHTML(
-                            String(rolloutPercent)
-                          )}%</div>
-                        </div>
-                        <div class="kv__row">
-                          <div class="kv__k">created_by</div>
-                          <div class="kv__v">${escapeHTML(
-                            createdBy || "-"
-                          )}</div>
-                        </div>
-                        <div class="kv__row">
-                          <div class="kv__k">created_at</div>
-                          <div class="kv__v">${escapeHTML(
-                            formatDateTime(createdAt)
-                          )}</div>
-                        </div>
-                      </div>
-                    `
-                }
-              </div>
-
-              <div class="card card--panel">
-                <div class="card__header">
-                  <div>
-                    <div class="card__title-sm">最近 7 天摘要</div>
-                    <div class="card__subtle">Metrics · ${escapeHTML(
-                      formatDateTime(w.from)
-                    )} ～ ${escapeHTML(formatDateTime(w.to))}</div>
-                  </div>
-                  <span class="pill pill--soft">默认窗口</span>
-                </div>
-
-                ${
-                  emptyMetrics
-                    ? `<div class="empty-hint">喵～暂时没有取到指标数据。</div>`
-                    : `
-                      <div class="stats">
-                        <div class="stat">
-                          <div class="stat__k">events_total</div>
-                          <div class="stat__v">${escapeHTML(
-                            formatNumber(eventsTotal)
-                          )}</div>
-                        </div>
-                        <div class="stat">
-                          <div class="stat__k">distinct_users</div>
-                          <div class="stat__v">${escapeHTML(
-                            formatNumber(distinctUsers)
-                          )}</div>
-                        </div>
-                        <div class="stat">
-                          <div class="stat__k">feedback.helpful_rate</div>
-                          <div class="stat__v">${escapeHTML(
-                            formatPercent01(helpfulRate, 1)
-                          )}</div>
-                        </div>
-                      </div>
-                    `
-                }
-              </div>
-            </div>
-          </div>
-        `;
-      })
-      .catch((err) => {
-        if (seq !== renderSeq) return;
-        showToast(`Dashboard 加载失败：${String(err && err.message ? err.message : err)}`, "danger");
-        pageEl.innerHTML = `
-          <div class="card card--welcome">
-            <div class="card__kawaii" aria-hidden="true">
-              <span class="sparkle"></span>
-              <span class="sparkle"></span>
-              <span class="sparkle"></span>
-            </div>
-            <h1 class="card__title">Dashboard 加载失败</h1>
-            <p class="card__desc">喵…可能是网络/口令/服务端出了一点小状况。稍后刷新试试，或重新登录～</p>
-            <pre class="code-block">${escapeHTML(
-              String(err && err.message ? err.message : err)
-            )}</pre>
-          </div>
-        `;
-      });
+    const p = window.AdminPages && window.AdminPages.dashboard;
+    if (p && typeof p.render === "function") {
+      p.render(pageEl, { ensureActive: () => seq === renderSeq });
+      return;
+    }
+    renderPlaceholder(pageEl, {
+      title: "Dashboard",
+      desc: "Dashboard 模块未加载（请检查 pages/dashboard.js 是否正确引入）",
+    });
   }
 
   function problemsLoadingHTML() {
@@ -604,33 +312,6 @@
         </div>
       </div>
     `;
-  }
-
-  function openModal({ title, bodyHTML, onClose }) {
-    const backdrop = document.createElement("div");
-    backdrop.className = "modal-backdrop";
-    backdrop.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHTML(
-        title || "弹窗"
-      )}">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
-          <div style="font-weight:900;">${escapeHTML(title || "")}</div>
-          <button class="btn btn--ghost" type="button" data-modal-close>关闭</button>
-        </div>
-        ${bodyHTML || ""}
-      </div>
-    `;
-    function close() {
-      backdrop.remove();
-      if (typeof onClose === "function") onClose();
-    }
-    backdrop.addEventListener("click", (e) => {
-      if (e.target === backdrop) close();
-      const btn = e.target && e.target.closest ? e.target.closest("[data-modal-close]") : null;
-      if (btn) close();
-    });
-    document.body.appendChild(backdrop);
-    return { close, backdrop };
   }
 
   function openCreateProblemModal({ onCreated }) {
@@ -1828,6 +1509,13 @@
       const div = document.createElement("div");
       div.id = "app";
       document.body.appendChild(div);
+    }
+
+    // Let apiFetch (in AdminLib) trigger the same auto-logout behavior on 401.
+    try {
+      setUnauthorizedHandler(logoutAndGoLogin);
+    } catch (_) {
+      // ignore
     }
 
     const token = getToken();
