@@ -265,6 +265,19 @@ input {
   align-items: end;
 }
 
+.audit-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.audit-pager {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 2px;
+}
+
 .field label {
   display: block;
   font-size: 12px;
@@ -865,6 +878,10 @@ input {
   }
 
   .metrics-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-filter-grid {
     grid-template-columns: 1fr;
   }
 
