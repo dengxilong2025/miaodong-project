@@ -26,6 +26,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/admin/release", handlers.AdminReleases)  // 兼容：POST
 	mux.HandleFunc("/admin/rollback", handlers.AdminRollback)
 	mux.HandleFunc("/admin/metrics", handlers.AdminMetrics)
+	mux.HandleFunc("/admin/audit", handlers.AdminAudit)
 
 	// Admin UI（静态单页），避免与 /admin/* API 冲突：使用 /admin/ui/
 	if h, err := adminui.Handler(); err != nil {
