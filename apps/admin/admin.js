@@ -38,9 +38,23 @@
 
   function parseRouteFromHash() {
     const h = window.location.hash || "";
-    const m = h.match(/^#\/([a-zA-Z0-9_-]+)$/);
+    // Support routes like:
+    // - #/metrics
+    // - #/metrics?mode=compare&from_a=...&to_a=...&from_b=...&to_b=...
+    const m = h.match(/^#\/([a-zA-Z0-9_-]+)(?:\?.*)?$/);
     const r = m ? m[1] : "";
     return ROUTES.includes(r) ? r : "";
+  }
+
+  function parseHashQuery() {
+    const h = window.location.hash || "";
+    const idx = h.indexOf("?");
+    if (idx === -1) return {};
+    const qs = h.slice(idx + 1);
+    const p = new URLSearchParams(qs);
+    const out = {};
+    for (const [k, v] of p.entries()) out[k] = v;
+    return out;
   }
 
   function ensureAuthedDefaultRoute() {
@@ -269,6 +283,20 @@
       title: "Dashboard",
       desc: "Dashboard 模块未加载（请检查 pages/dashboard.js 是否正确引入）",
     });
+  }
+
+  function renderPageViaModule(route, pageEl, seq, routeQuery) {
+    if (!pageEl) return false;
+    const p = window.AdminPages && window.AdminPages[route];
+    if (p && typeof p.render === "function") {
+      p.render(pageEl, {
+        route,
+        routeQuery: routeQuery || {},
+        ensureActive: () => seq === renderSeq,
+      });
+      return true;
+    }
+    return false;
   }
 
   function problemsLoadingHTML() {
@@ -1466,7 +1494,9 @@
     }
 
     const route = parseRouteFromHash() || DEFAULT_ROUTE;
+    // If hash is missing or invalid route, normalize to default route (no query needed).
     if (!parseRouteFromHash()) window.location.hash = `#/${route}`;
+    const routeQuery = parseHashQuery();
 
     renderSeq++;
     renderShell(route);
@@ -1478,6 +1508,8 @@
 
     const seq = renderSeq;
     if (route === "dashboard") {
+      // Prefer module-based pages (pages/dashboard.js).
+      if (renderPageViaModule("dashboard", pageRoot, seq, routeQuery)) return;
       renderDashboard(pageRoot, seq);
       return;
     }
@@ -1486,14 +1518,20 @@
       return;
     }
     if (route === "releases") {
+      // Prefer module-based pages (pages/releases.js).
+      if (renderPageViaModule("releases", pageRoot, seq, routeQuery)) return;
       renderReleases(pageRoot, seq);
       return;
     }
     if (route === "metrics") {
+      // Prefer module-based pages (pages/metrics.js).
+      if (renderPageViaModule("metrics", pageRoot, seq, routeQuery)) return;
       renderMetrics(pageRoot, seq);
       return;
     }
     if (route === "audit") {
+      // Prefer module-based pages (pages/audit.js).
+      if (renderPageViaModule("audit", pageRoot, seq, routeQuery)) return;
       renderAudit(pageRoot, seq);
       return;
     }
