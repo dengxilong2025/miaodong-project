@@ -2,4 +2,7 @@ module github.com/dengxilong2025/miaodong-project/services/api
 
 go 1.22
 
-require github.com/lib/pq v1.10.9
+require (
+	github.com/lib/pq v1.10.9
+	github.com/minio/minio-go/v7 v7.0.98
+)
