@@ -21,5 +21,11 @@ func TestAudioUploadURL(t *testing.T) {
 	if out["audio_id"] == "" || out["upload_url"] == "" || out["audio_url"] == "" {
 		t.Fatalf("missing fields: %v", out)
 	}
+	if out["storage"] == "" {
+		t.Fatalf("missing storage: %v", out)
+	}
+	h, ok := out["headers"].(map[string]any)
+	if !ok || len(h) == 0 {
+		t.Fatalf("missing headers object: %T %v", out["headers"], out)
+	}
 }
-

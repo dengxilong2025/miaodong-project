@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/storage"
 )
 
 // AudioUploadURL 生成上传指引（MVP占位实现：先走“上传到API”而非 MinIO 直传）。
@@ -27,20 +30,51 @@ func AudioUploadURL(w http.ResponseWriter, r *http.Request) {
 	audioID := "a_" + randHex(16)
 	base := baseURL(r)
 
+	// storage mode:
+	// - MIAODONG_AUDIO_STORAGE=api-direct -> force api-direct
+	// - otherwise: try minio-presign, fallback to api-direct
+	forceAPIDirect := strings.EqualFold(os.Getenv("MIAODONG_AUDIO_STORAGE"), "api-direct")
+
+	expires := 10 * time.Minute
+	expiresIn := int64(expires / time.Second)
+	contentType := "application/octet-stream"
+
+	// default response: api-direct (fallback)
 	uploadURL := fmt.Sprintf("%s/v1/audio/upload/%s", base, audioID)
 	audioURL := fmt.Sprintf("%s/v1/audio/%s", base, audioID)
+	out := map[string]any{
+		"audio_id":   audioID,
+		"upload_url": uploadURL,
+		"method":     "PUT",
+		"headers":    map[string]string{"Content-Type": contentType},
+		"expires_in": expiresIn,
+		"audio_url":  audioURL,
+		"storage":    "api-direct", // api-direct|minio-presign
+		"created_at": time.Now().Unix(),
+	}
+
+	if !forceAPIDirect {
+		// keep minio attempt quick; if anything fails, fallback to api-direct.
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		if m, err := storage.NewMinIOFromEnv(); err == nil {
+			if err := m.EnsureBucket(ctx); err == nil {
+				objectKey := fmt.Sprintf("audio/%s.bin", audioID)
+				if putURL, headers, err := m.PresignPut(ctx, objectKey, expires, contentType); err == nil {
+					if getURL, err := m.PresignGet(ctx, objectKey, expires); err == nil {
+						out["upload_url"] = putURL
+						out["audio_url"] = getURL
+						out["headers"] = headers
+						out["storage"] = "minio-presign"
+					}
+				}
+			}
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"audio_id":    audioID,
-		"upload_url":  uploadURL,
-		"method":      "PUT",
-		"headers":     map[string]string{"Content-Type": "application/octet-stream"},
-		"expires_in":  int64(10 * 60),
-		"audio_url":   audioURL,
-		"storage":     "api-direct", // api-direct|minio-presign
-		"created_at":  time.Now().Unix(),
-	})
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // AudioUploadByID 接收 PUT 上传并落本地临时目录。
@@ -115,4 +149,3 @@ func baseURL(r *http.Request) string {
 	host := r.Host
 	return scheme + "://" + host
 }
-
