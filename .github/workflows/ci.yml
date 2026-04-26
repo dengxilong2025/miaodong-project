@@ -185,6 +185,135 @@ jobs:
           print("E2E audit log: OK")
           PY
 
+      - name: "E2E: metrics attribution"
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+          GOFLAGS: -mod=mod
+        run: |
+          set -euo pipefail
+          API_URL="http://127.0.0.1:8080"
+          ADMIN_TOKEN="dev-admin"
+          PROBLEM_ID="night_meow"
+          REQUEST_ID="r1"
+
+          cd services/api
+
+          # Start API in background
+          go run ./cmd/api > /tmp/miaodong-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" >/dev/null 2>&1 || true' EXIT
+
+          # Wait for /v1/health
+          for i in {1..60}; do
+            if curl -fsS "${API_URL}/v1/health" >/dev/null; then
+              echo "api healthy"
+              break
+            fi
+            echo "waiting api... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              echo "api not healthy in time; logs:"
+              tail -n 200 /tmp/miaodong-api.log || true
+              exit 1
+            fi
+          done
+
+          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" PROBLEM_ID="${PROBLEM_ID}" REQUEST_ID="${REQUEST_ID}" python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+
+          api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
+          admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
+          problem_id = os.environ.get("PROBLEM_ID", "night_meow")
+          request_id = os.environ.get("REQUEST_ID", "r1")
+
+          def http_post_json(path: str, body: dict, headers: dict | None = None) -> dict:
+            url = urllib.parse.urljoin(api_url, path)
+            data = json.dumps(body).encode("utf-8")
+            req = urllib.request.Request(url, method="POST", data=data)
+            req.add_header("Content-Type", "application/json")
+            for k, v in (headers or {}).items():
+              req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              return json.loads(resp.read().decode("utf-8"))
+
+          def http_get_json(path: str, headers: dict | None = None) -> dict:
+            url = urllib.parse.urljoin(api_url, path)
+            req = urllib.request.Request(url, method="GET")
+            for k, v in (headers or {}).items():
+              req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              return json.loads(resp.read().decode("utf-8"))
+
+          now_ms = int(time.time() * 1000)
+          from_ms = now_ms - 10_000
+          to_ms = now_ms + 10_000
+
+          # Write 3 events into the same window:
+          # - r1 inference_started (with problem_id)
+          # - r1 result_page_viewed (without problem_id, but with request_id)
+          # - r1 feedback_submitted (helpful=true, can carry problem_id)
+          events = [
+            {
+              "event_name": "inference_started",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {"problem_id": problem_id},
+            },
+            {
+              "event_name": "result_page_viewed",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {},
+            },
+            {
+              "event_name": "feedback_submitted",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {"helpful": True, "problem_id": problem_id},
+            },
+          ]
+
+          for e in events:
+            out = http_post_json("/v1/analytics/event", e)
+            if not out.get("ok"):
+              raise SystemExit(f"expected ok=true, got: {out}")
+
+          strict = http_get_json(
+            f"/admin/metrics?from_ts_ms={from_ms}&to_ts_ms={to_ms}&problem_id={problem_id}&attribution=strict",
+            headers={"X-Admin-Token": admin_token},
+          )
+          by_request = http_get_json(
+            f"/admin/metrics?from_ts_ms={from_ms}&to_ts_ms={to_ms}&problem_id={problem_id}&attribution=by_request",
+            headers={"X-Admin-Token": admin_token},
+          )
+
+          with open("/tmp/strict.json", "w", encoding="utf-8") as f:
+            json.dump(strict, f)
+          with open("/tmp/by_request.json", "w", encoding="utf-8") as f:
+            json.dump(by_request, f)
+
+          if by_request.get("events_total", 0) <= strict.get("events_total", 0):
+            raise SystemExit(
+              f"expected by_request.events_total > strict.events_total, got: "
+              f"{by_request.get('events_total')} <= {strict.get('events_total')}"
+            )
+
+          print(
+            "E2E metrics attribution: OK",
+            "strict.events_total=",
+            strict.get("events_total"),
+            "by_request.events_total=",
+            by_request.get("events_total"),
+          )
+          PY
+
       - name: Tear down
         if: always()
         run: |
