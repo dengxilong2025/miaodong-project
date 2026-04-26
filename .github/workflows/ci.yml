@@ -158,6 +158,102 @@ jobs:
           print("E2E content api: OK", ids)
           PY
 
+      - name: "E2E: feedback & retest"
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+          GOFLAGS: -mod=mod
+        run: |
+          set -euo pipefail
+          API_URL="http://127.0.0.1:8080"
+          ADMIN_TOKEN="dev-admin"
+          cd services/api
+          
+          # Start API in background
+          go run ./cmd/api > /tmp/miaodong-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" >/dev/null 2>&1 || true' EXIT
+          
+          # Wait for /v1/health
+          for i in {1..60}; do
+            if curl -fsS "${API_URL}/v1/health" >/dev/null; then
+              echo "api healthy"
+              break
+            fi
+            echo "waiting api... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              echo "api not healthy in time; logs:"
+              tail -n 200 /tmp/miaodong-api.log || true
+              exit 1
+            fi
+          done
+          
+          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          
+          api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
+          admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
+          
+          now_ms = int(time.time() * 1000)
+          from_ms = now_ms - 10 * 60 * 1000
+          to_ms = now_ms + 10 * 60 * 1000
+          
+          def http_post_json(path: str, body: dict) -> dict:
+            url = urllib.parse.urljoin(api_url, path)
+            data = json.dumps(body).encode("utf-8")
+            req = urllib.request.Request(url, method="POST", data=data)
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              b = resp.read().decode("utf-8")
+              return json.loads(b) if b else {}
+          
+          def http_get_json(path: str, headers: dict | None = None) -> dict:
+            url = urllib.parse.urljoin(api_url, path)
+            req = urllib.request.Request(url, method="GET")
+            for k, v in (headers or {}).items():
+              req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              return json.loads(resp.read().decode("utf-8"))
+          
+          # 1) 写入 feedback
+          r = http_post_json("/v1/feedback", {
+            "request_id": f"r_fb_{now_ms}",
+            "helpful": True,
+            "intent_match": "match",
+            "notes": "ci e2e feedback",
+            "problem_id": "night_meow",
+            "content_version": 1,
+          })
+          assert r.get("ok") is True, r
+          
+          # 2) 写入 retest
+          r = http_post_json("/v1/retest", {
+            "problem_id": "night_meow",
+            "baseline_request_id": f"r_old_{now_ms}",
+            "current_request_id": f"r_new_{now_ms}",
+            "content_version": 1,
+            "notes": "ci e2e retest",
+          })
+          assert r.get("ok") is True, r
+          
+          # 3) 用 metrics 验证可统计
+          q = urllib.parse.urlencode({"from_ts_ms": str(from_ms), "to_ts_ms": str(to_ms)})
+          m = http_get_json(f"/admin/metrics?{q}", headers={"X-Admin-Token": admin_token})
+          
+          fb = m.get("feedback") or {}
+          assert fb.get("total", 0) >= 1, fb
+          assert fb.get("helpful_rate", 0) > 0, fb
+          
+          by = m.get("by_event_name") or {}
+          assert by.get("retest_submitted", 0) >= 1, by
+          
+          print("E2E feedback & retest: OK", {"feedback_total": fb.get("total"), "retest": by.get("retest_submitted")})
+          PY
+
       - name: "E2E: audit log"
         env:
           MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
