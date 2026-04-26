@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/authctx"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/content"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/db"
 )
@@ -48,11 +49,6 @@ func ListProblems(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid content_version", http.StatusBadRequest)
 		return
 	}
-	cv, err := content.ResolveContentVersion(r.Context(), "", explicitCV)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	limit, err := parseLimit(r.URL.Query().Get("limit"))
 	if err != nil {
@@ -66,6 +62,13 @@ func ListProblems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
+	userID := authctx.UserID(r.Context())
+	cv, err := content.ResolveContentVersionDB(r.Context(), conn, userID, explicitCV)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	items, err := content.ListProblems(r.Context(), conn, limit)
 	if err != nil {
@@ -96,11 +99,6 @@ func GetProblem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid content_version", http.StatusBadRequest)
 		return
 	}
-	cv, err := content.ResolveContentVersion(r.Context(), "", explicitCV)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	conn, err := db.Open()
 	if err != nil {
@@ -108,6 +106,13 @@ func GetProblem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
+	userID := authctx.UserID(r.Context())
+	cv, err := content.ResolveContentVersionDB(r.Context(), conn, userID, explicitCV)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	b, err := content.GetProblemBundle(r.Context(), conn, id)
 	if err == sql.ErrNoRows {
@@ -141,11 +146,6 @@ func GetResultTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid content_version", http.StatusBadRequest)
 		return
 	}
-	cv, err := content.ResolveContentVersion(r.Context(), "", explicitCV)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	// v0.1: limit is reserved for future use; still parse/validate to keep contract stable.
 	if _, err := parseLimit(r.URL.Query().Get("limit")); err != nil {
@@ -159,6 +159,13 @@ func GetResultTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
+	userID := authctx.UserID(r.Context())
+	cv, err := content.ResolveContentVersionDB(r.Context(), conn, userID, explicitCV)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	b, err := content.GetResultTemplate(r.Context(), conn, problemID)
 	if err == sql.ErrNoRows {
