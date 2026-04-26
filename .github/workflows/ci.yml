@@ -248,10 +248,15 @@ jobs:
           assert fb.get("total", 0) >= 1, fb
           assert fb.get("helpful_rate", 0) > 0, fb
           
-          by = m.get("by_event_name") or {}
-          assert by.get("retest_submitted", 0) >= 1, by
+          by_list = m.get("by_event_name") or []
+          retest_cnt = 0
+          for it in by_list:
+            if isinstance(it, dict) and it.get("event_name") == "retest_submitted":
+              retest_cnt = int(it.get("count", 0) or 0)
+              break
+          assert retest_cnt >= 1, by_list
           
-          print("E2E feedback & retest: OK", {"feedback_total": fb.get("total"), "retest": by.get("retest_submitted")})
+          print("E2E feedback & retest: OK", {"feedback_total": fb.get("total"), "retest": retest_cnt})
           PY
 
       - name: "E2E: audit log"
