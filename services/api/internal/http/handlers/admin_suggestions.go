@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/dengxilong2025/miaodong-project/services/api/internal/db"
 )
 
 // AdminSuggestions handles:
@@ -63,7 +61,7 @@ type adminSuggestion struct {
 }
 
 func adminListSuggestions(w http.ResponseWriter, r *http.Request) {
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -115,7 +113,7 @@ limit 500
 }
 
 func adminGetSuggestion(w http.ResponseWriter, r *http.Request, id string) {
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -220,7 +218,7 @@ func adminCreateSuggestion(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -287,7 +285,7 @@ func adminPatchSuggestion(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

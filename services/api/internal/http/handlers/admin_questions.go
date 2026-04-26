@@ -10,6 +10,10 @@ import (
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/db"
 )
 
+// openAdminContentDB exists for unit tests: we want to assert
+// "validation returns BEFORE opening DB".
+var openAdminContentDB = db.Open
+
 // AdminQuestions handles:
 // - GET  /admin/questions?problem_id=...
 // - POST /admin/questions
@@ -62,7 +66,7 @@ type adminQuestion struct {
 }
 
 func adminListQuestions(w http.ResponseWriter, r *http.Request) {
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -114,7 +118,7 @@ limit 500
 }
 
 func adminGetQuestion(w http.ResponseWriter, r *http.Request, id string) {
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -206,7 +210,7 @@ func adminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -271,7 +275,7 @@ func adminPatchQuestion(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

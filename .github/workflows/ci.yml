@@ -158,6 +158,108 @@ jobs:
           print("E2E content api: OK", ids)
           PY
 
+      - name: "E2E: admin content crud"
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+          GOFLAGS: -mod=mod
+        run: |
+          set -euo pipefail
+          API_URL="http://127.0.0.1:8080"
+          ADMIN_TOKEN="dev-admin"
+          PROBLEM_ID="night_meow"
+          cd services/api
+          
+          # Start API in background
+          go run ./cmd/api > /tmp/miaodong-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" >/dev/null 2>&1 || true' EXIT
+          
+          # Wait for /v1/health
+          for i in {1..60}; do
+            if curl -fsS "${API_URL}/v1/health" >/dev/null; then
+              echo "api healthy"
+              break
+            fi
+            echo "waiting api... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              echo "api not healthy in time; logs:"
+              tail -n 200 /tmp/miaodong-api.log || true
+              exit 1
+            fi
+          done
+          
+          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" PROBLEM_ID="${PROBLEM_ID}" python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+          
+          api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
+          admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
+          problem_id = os.environ.get("PROBLEM_ID", "night_meow")
+          
+          now_ms = int(time.time() * 1000)
+          qid = f"q_ci_admin_{now_ms}"
+          qtext = f"ci admin question {now_ms}"
+          
+          def http_json(method: str, path: str, body: dict | None = None, headers: dict | None = None) -> dict:
+            url = urllib.parse.urljoin(api_url, path)
+            data = json.dumps(body).encode("utf-8") if body is not None else None
+            req = urllib.request.Request(url, method=method, data=data)
+            req.add_header("Content-Type", "application/json")
+            for k, v in (headers or {}).items():
+              req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              b = resp.read().decode("utf-8")
+              return json.loads(b) if b else {}
+          
+          # 1) POST /admin/questions (draft)
+          r1 = http_json(
+            "POST",
+            "/admin/questions",
+            {
+              "actor": "ci",
+              "id": qid,
+              "problem_id": problem_id,
+              "text": qtext,
+              "type": "single_choice",
+            },
+            headers={"X-Admin-Token": admin_token},
+          )
+          assert r1.get("id") == qid, r1
+          
+          # 2) PATCH /admin/questions/{id} -> published
+          r2 = http_json(
+            "PATCH",
+            f"/admin/questions/{qid}",
+            {"actor": "ci", "status": "published"},
+            headers={"X-Admin-Token": admin_token},
+          )
+          assert r2.get("ok") is True, r2
+          
+          # 3) GET /v1/problems/{problem_id} and assert questions contains the new item
+          r3 = http_json("GET", f"/v1/problems/{problem_id}")
+          bundle = r3.get("bundle") or {}
+          qs = bundle.get("questions") or []
+          if not isinstance(qs, list):
+            raise SystemExit(f"expected bundle.questions to be list, got: {type(qs)}")
+          
+          found = None
+          for q in qs:
+            if isinstance(q, dict) and q.get("id") == qid:
+              found = q
+              break
+          
+          if not found:
+            raise SystemExit(f"expected question {qid} in bundle.questions, got ids={[it.get('id') for it in qs if isinstance(it, dict)]}")
+          
+          assert found.get("status") == "published", found
+          assert found.get("text") == qtext, found
+          print("E2E admin content crud: OK", {"problem_id": problem_id, "qid": qid})
+          PY
+
       - name: "E2E: content_version rollout"
         env:
           MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable

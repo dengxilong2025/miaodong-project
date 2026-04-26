@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/dengxilong2025/miaodong-project/services/api/internal/db"
 )
 
 // AdminToolsGuides handles:
@@ -64,7 +62,7 @@ func adminGetToolsGuideByProblemIDQuery(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -142,7 +140,7 @@ func adminUpsertToolsGuide(w http.ResponseWriter, r *http.Request, problemID str
 		}
 	}
 
-	conn, err := db.Open()
+	conn, err := openAdminContentDB()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -286,4 +284,3 @@ func adminToolsGuideStatusOK(s string) bool {
 		return false
 	}
 }
-
