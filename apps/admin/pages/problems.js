@@ -174,6 +174,15 @@
         const p = state.selectedProblem || {};
         const tab = state.activeTab;
 
+        function jsonText(v, fallback) {
+          if (v === undefined || v === null) return fallback;
+          try {
+            return JSON.stringify(v, null, 2);
+          } catch (_) {
+            return fallback;
+          }
+        }
+
         function tabBtn(key, label) {
           const active = key === tab;
           const klass = active ? "btn btn--primary" : "btn btn--ghost";
@@ -185,7 +194,7 @@
         editorEl.innerHTML = `
           <div class="pill pill--soft" style="margin: 0 0 10px;">
             已选择：<span class="cell-mono">#${escapeHTML(state.selectedId)}</span>
-            ${state.dirty ? `<span class="pill pill--soft" style="margin-left:8px;">未保存</span>` : ""}
+            <span class="pill pill--soft" data-unsaved-badge style="margin-left:8px;${state.dirty ? "" : "display:none;"}">未保存</span>
           </div>
 
           <div class="row" style="gap:10px;flex-wrap:wrap;margin:0 0 12px;">
@@ -247,6 +256,27 @@
                 </div>
               </div>
             `
+                : tab === "questions"
+                ? `
+              <div class="row" style="justify-content:space-between;align-items:flex-end;gap:12px;">
+                <div>
+                  <div style="font-weight:900;">Questions</div>
+                  <div class="card__subtle">追问列表/编辑（v0.1）</div>
+                </div>
+                <button class="btn btn--primary" type="button" id="qCreateBtn">新建追问</button>
+              </div>
+
+              <div class="problems-layout" style="grid-template-columns: 1fr 1fr; margin-top: 12px;">
+                <div>
+                  <div class="pill pill--soft" style="margin:0 0 10px;">列表</div>
+                  <div id="qList" class="problems-list" style="max-height: 420px;"></div>
+                </div>
+                <div>
+                  <div class="pill pill--soft" style="margin:0 0 10px;">编辑</div>
+                  <div id="qEditorArea" class="empty-hint">点左侧选一条追问，或先新建一条～</div>
+                </div>
+              </div>
+            `
                 : `
               <div class="empty-hint">这一页先占位喵～接下来会把 ${escapeHTML(
                 tab
@@ -282,11 +312,9 @@
           const saveBtn = $("#problemSaveBtn", editorEl);
 
           function markDirty() {
-            if (!state.dirty) {
-              state.dirty = true;
-              // update the little "未保存" badge
-              renderEditor();
-            }
+            state.dirty = true;
+            const badge = editorEl.querySelector("[data-unsaved-badge]");
+            if (badge) badge.style.display = "inline-flex";
           }
 
           if (titleInput)
@@ -353,6 +381,285 @@
                 showToast(`保存失败：${String(err && err.message ? err.message : err)}`, "danger");
               }
             });
+        }
+
+        if (tab === "questions") {
+          // lazy init
+          state.qState = state.qState || {
+            items: [],
+            selectedId: "",
+            form: {
+              priority: 0,
+              text: "",
+              type: "single_choice",
+              optionsText: "[]",
+              conditionText: "{}",
+              status: "draft",
+            },
+          };
+
+          const qState = state.qState;
+          const list = $("#qList", editorEl);
+          const area = $("#qEditorArea", editorEl);
+          const createBtn = $("#qCreateBtn", editorEl);
+
+          async function loadQuestions() {
+            if (!list) return;
+            list.innerHTML = `
+              <div class="skeleton" style="width: 70%"></div>
+              <div class="skeleton" style="width: 54%"></div>
+              <div class="skeleton" style="width: 62%"></div>
+            `;
+            try {
+              const res = await apiFetch(
+                `/admin/questions?problem_id=${encodeURIComponent(state.selectedId)}`
+              );
+              qState.items = Array.isArray(res.items) ? res.items : [];
+              renderQuestionsList();
+              renderQuestionEditor();
+            } catch (err) {
+              const msg = `加载 questions 失败：${String(err && err.message ? err.message : err)}`;
+              showToast(msg, "danger");
+              if (list) list.innerHTML = `<pre class="code-block">${escapeHTML(msg)}</pre>`;
+            }
+          }
+
+          function renderQuestionsList() {
+            if (!list) return;
+            if (!qState.items.length) {
+              list.innerHTML = `<div class="empty-hint">还没有追问～点“新建追问”创建一个吧。</div>`;
+              return;
+            }
+            list.innerHTML = qState.items
+              .map((q) => {
+                const id = String(q.id || "");
+                const active = id && id === qState.selectedId ? "is-active" : "";
+                const title = String(q.text || q.id || "");
+                const meta = `${q.priority ?? 0} · ${q.status || ""}`;
+                return `
+                  <button type="button" class="problems-item ${active}" data-qid="${escapeHTML(
+                  id
+                )}">
+                    <div class="problems-item__title">${escapeHTML(title)}</div>
+                    <div class="problems-item__meta">
+                      <span class="pill pill--soft">#${escapeHTML(id)}</span>
+                      <span class="pill pill--soft">${escapeHTML(meta)}</span>
+                    </div>
+                  </button>
+                `;
+              })
+              .join("");
+          }
+
+          function setFormFromQuestion(q) {
+            qState.form = {
+              priority: Number(q.priority || 0),
+              text: String(q.text || ""),
+              type: String(q.type || "single_choice"),
+              optionsText: jsonText(q.options, "[]"),
+              conditionText: jsonText(q.condition, "{}"),
+              status: String(q.status || "draft"),
+            };
+            state.dirty = false;
+          }
+
+          function renderQuestionEditor() {
+            if (!area) return;
+            if (!qState.selectedId) {
+              area.innerHTML = `<div class="empty-hint">点左侧选一条追问，或先新建一条～</div>`;
+              return;
+            }
+            area.innerHTML = `
+              <div class="row" style="justify-content:space-between;align-items:flex-end;gap:12px;margin:0 0 10px;">
+                <div>
+                  <div style="font-weight:900;">编辑追问</div>
+                  <div class="card__subtle"><span class="cell-mono">#${escapeHTML(
+                    qState.selectedId
+                  )}</span></div>
+                </div>
+                <button class="btn btn--primary" type="button" id="qSaveBtn">保存</button>
+              </div>
+
+              <div class="kv">
+                <div class="field">
+                  <label>priority</label>
+                  <input class="input" id="qPriority" type="number" value="${escapeHTML(
+                    String(qState.form.priority ?? 0)
+                  )}" />
+                </div>
+                <div class="field">
+                  <label>type</label>
+                  <select class="input" id="qType">
+                    ${["single_choice", "multi_choice", "text"]
+                      .map((t) => {
+                        const sel = qState.form.type === t ? "selected" : "";
+                        return `<option value="${t}" ${sel}>${t}</option>`;
+                      })
+                      .join("")}
+                  </select>
+                </div>
+                <div class="field">
+                  <label>text</label>
+                  <textarea class="input textarea" id="qText">${escapeHTML(
+                    qState.form.text
+                  )}</textarea>
+                </div>
+                <div class="field">
+                  <label>options（JSON 数组）</label>
+                  <textarea class="input textarea" id="qOptions" placeholder='["a","b"]'>${escapeHTML(
+                    qState.form.optionsText
+                  )}</textarea>
+                </div>
+                <div class="field">
+                  <label>condition（JSON 对象，可选）</label>
+                  <textarea class="input textarea" id="qCondition" placeholder='{"if":"..."}'>${escapeHTML(
+                    qState.form.conditionText
+                  )}</textarea>
+                </div>
+                <div class="field">
+                  <label>status</label>
+                  <select class="input" id="qStatus">
+                    ${["draft", "published", "archived"]
+                      .map((s) => {
+                        const sel = qState.form.status === s ? "selected" : "";
+                        return `<option value="${s}" ${sel}>${s}</option>`;
+                      })
+                      .join("")}
+                  </select>
+                </div>
+              </div>
+            `;
+
+            const priorityEl = $("#qPriority", area);
+            const typeEl = $("#qType", area);
+            const textEl = $("#qText", area);
+            const optionsEl = $("#qOptions", area);
+            const condEl = $("#qCondition", area);
+            const statusEl = $("#qStatus", area);
+            const saveEl = $("#qSaveBtn", area);
+
+            function markDirty() {
+              state.dirty = true;
+              const badge = editorEl.querySelector("[data-unsaved-badge]");
+              if (badge) badge.style.display = "inline-flex";
+            }
+
+            if (priorityEl)
+              priorityEl.addEventListener("input", () => {
+                qState.form.priority = Number(priorityEl.value || 0);
+                markDirty();
+              });
+            if (typeEl)
+              typeEl.addEventListener("change", () => {
+                qState.form.type = String(typeEl.value || "");
+                markDirty();
+              });
+            if (textEl)
+              textEl.addEventListener("input", () => {
+                qState.form.text = String(textEl.value || "");
+                markDirty();
+              });
+            if (optionsEl)
+              optionsEl.addEventListener("input", () => {
+                qState.form.optionsText = String(optionsEl.value || "");
+                markDirty();
+              });
+            if (condEl)
+              condEl.addEventListener("input", () => {
+                qState.form.conditionText = String(condEl.value || "");
+                markDirty();
+              });
+            if (statusEl)
+              statusEl.addEventListener("change", () => {
+                qState.form.status = String(statusEl.value || "draft");
+                markDirty();
+              });
+
+            if (saveEl)
+              saveEl.addEventListener("click", async () => {
+                try {
+                  let optionsVal;
+                  let conditionVal;
+                  const optTxt = String(qState.form.optionsText || "").trim();
+                  const condTxt = String(qState.form.conditionText || "").trim();
+                  optionsVal = optTxt ? JSON.parse(optTxt) : [];
+                  conditionVal = condTxt ? JSON.parse(condTxt) : {};
+
+                  const body = {
+                    actor: "admin",
+                    priority: Number(qState.form.priority || 0),
+                    text: String(qState.form.text || "").trim(),
+                    type: String(qState.form.type || "").trim(),
+                    options: optionsVal,
+                    condition: conditionVal,
+                    status: String(qState.form.status || "draft"),
+                  };
+
+                  await apiFetch(`/admin/questions/${encodeURIComponent(qState.selectedId)}`, {
+                    method: "PATCH",
+                    body,
+                  });
+                  showToast("追问已保存～", "success");
+                  state.dirty = false;
+                  await loadQuestions();
+                } catch (err) {
+                  showToast(`保存失败：${String(err && err.message ? err.message : err)}`, "danger");
+                }
+              });
+          }
+
+          if (createBtn)
+            createBtn.addEventListener("click", async () => {
+              try {
+                const id = `q_${state.selectedId}_${Date.now()}`;
+                await apiFetch("/admin/questions", {
+                  method: "POST",
+                  body: {
+                    actor: "admin",
+                    id,
+                    problem_id: state.selectedId,
+                    priority: 0,
+                    text: "（新追问）请编辑这条追问文本…",
+                    type: "single_choice",
+                    options: ["是", "否"],
+                    condition: {},
+                  },
+                });
+                showToast("已新建追问～", "success");
+                qState.selectedId = id;
+                await loadQuestions();
+              } catch (err) {
+                showToast(`新建失败：${String(err && err.message ? err.message : err)}`, "danger");
+              }
+            });
+
+          if (list)
+            list.addEventListener("click", (e) => {
+              const btn =
+                e.target && e.target.closest ? e.target.closest("[data-qid]") : null;
+              if (!btn) return;
+              const id = btn.getAttribute("data-qid") || "";
+              if (!id || id === qState.selectedId) return;
+              void (async () => {
+                const ok = await confirmDiscardIfDirty("切换追问");
+                if (!ok) return;
+                qState.selectedId = id;
+                const q = qState.items.find((x) => String(x.id) === id) || {};
+                setFormFromQuestion(q);
+                renderQuestionsList();
+                renderQuestionEditor();
+              })();
+            });
+
+          // initial load
+          if (!qState._loadedFor || qState._loadedFor !== state.selectedId) {
+            qState._loadedFor = state.selectedId;
+            qState.selectedId = "";
+            void loadQuestions();
+          } else {
+            renderQuestionsList();
+            renderQuestionEditor();
+          }
         }
       }
 
