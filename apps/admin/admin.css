@@ -252,6 +252,34 @@ input {
   flex-wrap: wrap;
 }
 
+/* === Segmented buttons === */
+.seg {
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg) 70%, #ffffff 30%);
+  border: 1px solid var(--border);
+}
+.seg__btn {
+  border: 0;
+  cursor: pointer;
+  border-radius: 14px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+}
+.seg__btn.is-active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 24%, #ffffff 76%),
+    #fff
+  );
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border) 68%);
+  box-shadow: var(--shadow-sm);
+}
+
 .form {
   display: flex;
   flex-direction: column;

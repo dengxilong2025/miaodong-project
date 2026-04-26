@@ -8,6 +8,9 @@
   window.AdminPages = window.AdminPages || {};
 
   const DAY_MS = 24 * 60 * 60 * 1000;
+  const ATTR_STRICT = "strict";
+  const ATTR_BY_REQUEST = "by_request";
+  const LS_ATTR_KEY = "miaodong_metrics_attribution";
 
   function parseMsStrict(inputValue) {
     const raw = String(inputValue || "").trim();
@@ -73,6 +76,15 @@
                 <button class="btn btn--primary" type="submit" id="metricsQueryBtn">查询</button>
               </div>
             </div>
+
+            <div class="field">
+              <label>口径 attribution</label>
+              <div class="seg" id="metricsAttrSeg">
+                <button type="button" class="seg__btn" data-attr="strict">严格</button>
+                <button type="button" class="seg__btn" data-attr="by_request">归因</button>
+              </div>
+              <div class="help">严格：仅统计带 problem_id 的事件；归因：按 request_id 聚合链路。</div>
+            </div>
           </form>
         </div>
 
@@ -83,7 +95,10 @@
                 <div class="card__title-sm">汇总</div>
                 <div class="card__subtle" id="metricsWindowHint">-</div>
               </div>
-              <span class="pill pill--soft">events / users</span>
+              <div class="row">
+                <span class="pill pill--soft">events / users</span>
+                <span class="pill pill--soft">口径：<span id="metricsAttrPill">严格</span></span>
+              </div>
             </div>
             <div id="metricsSummary">
               <div class="card__row">
@@ -190,7 +205,10 @@
               <div class="card__title-sm">对比结果</div>
               <div class="card__subtle" id="metricsCompareHint">-</div>
             </div>
-            <span class="pill pill--soft">B - A</span>
+            <div class="row">
+              <span class="pill pill--soft">B - A</span>
+              <span class="pill pill--soft">口径：<span id="metricsCompareAttrPill">-</span></span>
+            </div>
           </div>
 
           <div id="metricsCompareTable" class="table-wrap" aria-label="Metrics Compare">
@@ -253,15 +271,45 @@
     const toEl = $("#metricsTo", el);
     const problemIdEl = $("#metricsProblemId", el);
     const queryBtn = $("#metricsQueryBtn", el);
+    const attrSegEl = $("#metricsAttrSeg", el);
+    const attrPillEl = $("#metricsAttrPill", el);
 
     const windowHintEl = $("#metricsWindowHint", el);
     const summaryEl = $("#metricsSummary", el);
     const feedbackEl = $("#metricsFeedback", el);
     const byEventEl = $("#metricsByEvent", el);
 
+    const state = {
+      attribution: localStorage.getItem(LS_ATTR_KEY) || ATTR_STRICT,
+    };
+    if (state.attribution !== ATTR_BY_REQUEST) state.attribution = ATTR_STRICT;
+
     function setWindowInputs(from, to) {
       if (fromEl) fromEl.value = String(from);
       if (toEl) toEl.value = String(to);
+    }
+
+    function updateAttrUI() {
+      if (attrSegEl) {
+        const btns = attrSegEl.querySelectorAll("[data-attr]");
+        btns.forEach((b) => {
+          const v = b.getAttribute("data-attr") || "";
+          const on = v === state.attribution;
+          b.classList.toggle("is-active", on);
+        });
+      }
+      if (attrPillEl) attrPillEl.textContent = state.attribution === ATTR_BY_REQUEST ? "归因" : "严格";
+    }
+
+    function runQuery() {
+      void doQuery();
+    }
+
+    function setAttribution(v) {
+      state.attribution = v === ATTR_BY_REQUEST ? ATTR_BY_REQUEST : ATTR_STRICT;
+      localStorage.setItem(LS_ATTR_KEY, state.attribution);
+      updateAttrUI();
+      runQuery();
     }
 
     function renderLoading() {
@@ -378,6 +426,7 @@
       params.set("from_ts_ms", String(from));
       params.set("to_ts_ms", String(to));
       params.set("problem_id", problemId);
+      params.set("attribution", state.attribution);
 
       try {
         const data = await apiFetch(`/admin/metrics?${params.toString()}`);
@@ -407,6 +456,12 @@
 
     // quick window buttons
     el.addEventListener("click", (e) => {
+      const segBtn = e.target && e.target.closest ? e.target.closest("#metricsAttrSeg [data-attr]") : null;
+      if (segBtn) {
+        const v = segBtn.getAttribute("data-attr") || "";
+        setAttribution(v);
+        return;
+      }
       const btn = e.target && e.target.closest ? e.target.closest("[data-metrics-quick]") : null;
       if (!btn) return;
       const key = btn.getAttribute("data-metrics-quick") || "";
@@ -420,6 +475,7 @@
     // default: last 24h and auto query
     const now = Date.now();
     setWindowInputs(now - 1 * DAY_MS, now);
+    updateAttrUI();
     void doQuery();
   }
 
@@ -429,6 +485,7 @@
     const ensureActive =
       ctx && typeof ctx.ensureActive === "function" ? ctx.ensureActive : () => true;
     const routeQuery = ctx && ctx.routeQuery ? ctx.routeQuery : {};
+    const attr = routeQuery.attribution === ATTR_BY_REQUEST ? ATTR_BY_REQUEST : ATTR_STRICT;
 
     el.innerHTML = metricsCompareLoadingHTML();
 
@@ -441,6 +498,9 @@
     const btn = $("#metricsCompareBtn", el);
     const hintEl = $("#metricsCompareHint", el);
     const tableWrapEl = $("#metricsCompareTable", el);
+    const attrPillEl = $("#metricsCompareAttrPill", el);
+
+    if (attrPillEl) attrPillEl.textContent = attr === ATTR_BY_REQUEST ? "归因" : "严格";
 
     function renderLoading() {
       if (!tableWrapEl) return;
@@ -542,6 +602,7 @@
       params.set("from_b", String(fromB));
       params.set("to_b", String(toB));
       params.set("problem_id", problemId);
+      params.set("attribution", attr);
 
       try {
         const data = await apiFetch(`/admin/metrics/compare?${params.toString()}`);
@@ -613,4 +674,3 @@
     },
   };
 })();
-
