@@ -2,7 +2,6 @@ package http
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/http/adminui"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/http/handlers"
@@ -41,30 +40,11 @@ func NewRouter() http.Handler {
 	// problems：同时支持
 	// - GET /v1/problems
 	// - GET /v1/problems/{id}
-	mux.HandleFunc("/v1/problems", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/problems" {
-			http.NotFound(w, r)
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		handlers.ListProblems(w, r)
-	})
-	mux.HandleFunc("/v1/problems/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// 约定：id 为路径最后一段
-		id := strings.TrimPrefix(r.URL.Path, "/v1/problems/")
-		if id == "" {
-			http.NotFound(w, r)
-			return
-		}
-		handlers.GetProblemByID(w, r, id)
-	})
+	mux.HandleFunc("/v1/problems", handlers.ListProblems)
+	mux.HandleFunc("/v1/problems/", handlers.GetProblem)
+
+	// templates
+	mux.HandleFunc("/v1/templates/result", handlers.GetResultTemplate)
 
 	// 埋点（App侧）
 	mux.HandleFunc("/v1/analytics/event", handlers.AnalyticsEvent)
