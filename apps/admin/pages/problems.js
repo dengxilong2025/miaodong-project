@@ -277,6 +277,68 @@
                 </div>
               </div>
             `
+                : tab === "suggestions"
+                ? `
+              <div class="row" style="justify-content:space-between;align-items:flex-end;gap:12px;">
+                <div>
+                  <div style="font-weight:900;">Suggestions</div>
+                  <div class="card__subtle">建议列表/编辑（v0.1）</div>
+                </div>
+                <button class="btn btn--primary" type="button" id="sCreateBtn">新建建议</button>
+              </div>
+
+              <div class="problems-layout" style="grid-template-columns: 1fr 1fr; margin-top: 12px;">
+                <div>
+                  <div class="pill pill--soft" style="margin:0 0 10px;">列表</div>
+                  <div id="sList" class="problems-list" style="max-height: 420px;"></div>
+                </div>
+                <div>
+                  <div class="pill pill--soft" style="margin:0 0 10px;">编辑</div>
+                  <div id="sEditorArea" class="empty-hint">点左侧选一条建议，或先新建一条～</div>
+                </div>
+              </div>
+            `
+                : tab === "tools"
+                ? `
+              <div class="row" style="justify-content:space-between;align-items:flex-end;gap:12px;">
+                <div>
+                  <div style="font-weight:900;">Tools Guide</div>
+                  <div class="card__subtle">工具区（按 problem_id 1:1 upsert）</div>
+                </div>
+                <button class="btn btn--primary" type="button" id="tgSaveBtn">保存</button>
+              </div>
+
+              <div id="tgNotice" class="empty-hint" style="margin-top:10px;"></div>
+
+              <div class="kv" style="margin-top:12px;">
+                <div class="field">
+                  <label>collapsed_by_default</label>
+                  <select class="input" id="tgCollapsed">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label>guide_bullets（JSON 数组）</label>
+                  <textarea class="input textarea" id="tgBullets" placeholder='["...","..."]'></textarea>
+                </div>
+
+                <div class="field">
+                  <label>efficiency_items（JSON 数组）</label>
+                  <textarea class="input textarea" id="tgEfficiency" placeholder='["...","..."]'></textarea>
+                </div>
+
+                <div class="field">
+                  <label>status</label>
+                  <select class="input" id="tgStatus">
+                    <option value="draft">draft</option>
+                    <option value="published">published</option>
+                    <option value="archived">archived</option>
+                  </select>
+                </div>
+              </div>
+            `
                 : `
               <div class="empty-hint">这一页先占位喵～接下来会把 ${escapeHTML(
                 tab
@@ -659,6 +721,378 @@
           } else {
             renderQuestionsList();
             renderQuestionEditor();
+          }
+        }
+
+        if (tab === "suggestions") {
+          state.sState = state.sState || {
+            items: [],
+            selectedId: "",
+            form: {
+              priority: 0,
+              title: "",
+              stepsText: "[]",
+              conditionText: "{}",
+              status: "draft",
+            },
+          };
+          const sState = state.sState;
+          const list = $("#sList", editorEl);
+          const area = $("#sEditorArea", editorEl);
+          const createBtn = $("#sCreateBtn", editorEl);
+
+          async function loadSuggestions() {
+            if (!list) return;
+            list.innerHTML = `
+              <div class="skeleton" style="width: 70%"></div>
+              <div class="skeleton" style="width: 54%"></div>
+              <div class="skeleton" style="width: 62%"></div>
+            `;
+            try {
+              const res = await apiFetch(
+                `/admin/suggestions?problem_id=${encodeURIComponent(state.selectedId)}`
+              );
+              sState.items = Array.isArray(res.items) ? res.items : [];
+              renderSuggestionsList();
+              renderSuggestionEditor();
+            } catch (err) {
+              const msg = `加载 suggestions 失败：${String(err && err.message ? err.message : err)}`;
+              showToast(msg, "danger");
+              if (list) list.innerHTML = `<pre class="code-block">${escapeHTML(msg)}</pre>`;
+            }
+          }
+
+          function renderSuggestionsList() {
+            if (!list) return;
+            if (!sState.items.length) {
+              list.innerHTML = `<div class="empty-hint">还没有建议～点“新建建议”创建一个吧。</div>`;
+              return;
+            }
+            list.innerHTML = sState.items
+              .map((s) => {
+                const id = String(s.id || "");
+                const active = id && id === sState.selectedId ? "is-active" : "";
+                const title = String(s.title || s.id || "");
+                const meta = `${s.priority ?? 0} · ${s.status || ""}`;
+                return `
+                  <button type="button" class="problems-item ${active}" data-sid="${escapeHTML(
+                  id
+                )}">
+                    <div class="problems-item__title">${escapeHTML(title)}</div>
+                    <div class="problems-item__meta">
+                      <span class="pill pill--soft">#${escapeHTML(id)}</span>
+                      <span class="pill pill--soft">${escapeHTML(meta)}</span>
+                    </div>
+                  </button>
+                `;
+              })
+              .join("");
+          }
+
+          function setFormFromSuggestion(s) {
+            sState.form = {
+              priority: Number(s.priority || 0),
+              title: String(s.title || ""),
+              stepsText: jsonText(s.steps, "[]"),
+              conditionText: jsonText(s.condition, "{}"),
+              status: String(s.status || "draft"),
+            };
+            state.dirty = false;
+          }
+
+          function renderSuggestionEditor() {
+            if (!area) return;
+            if (!sState.selectedId) {
+              area.innerHTML = `<div class="empty-hint">点左侧选一条建议，或先新建一条～</div>`;
+              return;
+            }
+            area.innerHTML = `
+              <div class="row" style="justify-content:space-between;align-items:flex-end;gap:12px;margin:0 0 10px;">
+                <div>
+                  <div style="font-weight:900;">编辑建议</div>
+                  <div class="card__subtle"><span class="cell-mono">#${escapeHTML(
+                    sState.selectedId
+                  )}</span></div>
+                </div>
+                <button class="btn btn--primary" type="button" id="sSaveBtn">保存</button>
+              </div>
+
+              <div class="kv">
+                <div class="field">
+                  <label>priority</label>
+                  <input class="input" id="sPriority" type="number" value="${escapeHTML(
+                    String(sState.form.priority ?? 0)
+                  )}" />
+                </div>
+                <div class="field">
+                  <label>title</label>
+                  <input class="input" id="sTitle" value="${escapeHTML(
+                    sState.form.title
+                  )}" placeholder="例如：晚上加一段互动游戏" />
+                </div>
+                <div class="field">
+                  <label>steps（JSON 数组）</label>
+                  <textarea class="input textarea" id="sSteps" placeholder='["step1","step2"]'>${escapeHTML(
+                    sState.form.stepsText
+                  )}</textarea>
+                </div>
+                <div class="field">
+                  <label>condition（JSON 对象，可选）</label>
+                  <textarea class="input textarea" id="sCondition" placeholder='{"if":"..."}'>${escapeHTML(
+                    sState.form.conditionText
+                  )}</textarea>
+                </div>
+                <div class="field">
+                  <label>status</label>
+                  <select class="input" id="sStatus">
+                    ${["draft", "published", "archived"]
+                      .map((st) => {
+                        const sel = sState.form.status === st ? "selected" : "";
+                        return `<option value="${st}" ${sel}>${st}</option>`;
+                      })
+                      .join("")}
+                  </select>
+                </div>
+              </div>
+            `;
+
+            const priorityEl = $("#sPriority", area);
+            const titleEl = $("#sTitle", area);
+            const stepsEl = $("#sSteps", area);
+            const condEl = $("#sCondition", area);
+            const statusEl = $("#sStatus", area);
+            const saveEl = $("#sSaveBtn", area);
+
+            function markDirty() {
+              state.dirty = true;
+              const badge = editorEl.querySelector("[data-unsaved-badge]");
+              if (badge) badge.style.display = "inline-flex";
+            }
+
+            if (priorityEl)
+              priorityEl.addEventListener("input", () => {
+                sState.form.priority = Number(priorityEl.value || 0);
+                markDirty();
+              });
+            if (titleEl)
+              titleEl.addEventListener("input", () => {
+                sState.form.title = String(titleEl.value || "");
+                markDirty();
+              });
+            if (stepsEl)
+              stepsEl.addEventListener("input", () => {
+                sState.form.stepsText = String(stepsEl.value || "");
+                markDirty();
+              });
+            if (condEl)
+              condEl.addEventListener("input", () => {
+                sState.form.conditionText = String(condEl.value || "");
+                markDirty();
+              });
+            if (statusEl)
+              statusEl.addEventListener("change", () => {
+                sState.form.status = String(statusEl.value || "draft");
+                markDirty();
+              });
+
+            if (saveEl)
+              saveEl.addEventListener("click", async () => {
+                try {
+                  const stepsTxt = String(sState.form.stepsText || "").trim();
+                  const condTxt = String(sState.form.conditionText || "").trim();
+                  const stepsVal = stepsTxt ? JSON.parse(stepsTxt) : [];
+                  const condVal = condTxt ? JSON.parse(condTxt) : {};
+
+                  const body = {
+                    actor: "admin",
+                    priority: Number(sState.form.priority || 0),
+                    title: String(sState.form.title || "").trim(),
+                    steps: stepsVal,
+                    condition: condVal,
+                    status: String(sState.form.status || "draft"),
+                  };
+
+                  await apiFetch(`/admin/suggestions/${encodeURIComponent(sState.selectedId)}`, {
+                    method: "PATCH",
+                    body,
+                  });
+                  showToast("建议已保存～", "success");
+                  state.dirty = false;
+                  await loadSuggestions();
+                } catch (err) {
+                  showToast(`保存失败：${String(err && err.message ? err.message : err)}`, "danger");
+                }
+              });
+          }
+
+          if (createBtn)
+            createBtn.addEventListener("click", async () => {
+              try {
+                const id = `s_${state.selectedId}_${Date.now()}`;
+                await apiFetch("/admin/suggestions", {
+                  method: "POST",
+                  body: {
+                    actor: "admin",
+                    id,
+                    problem_id: state.selectedId,
+                    priority: 0,
+                    title: "（新建议）请编辑建议标题…",
+                    steps: ["（步骤1）…", "（步骤2）…"],
+                    condition: {},
+                  },
+                });
+                showToast("已新建建议～", "success");
+                sState.selectedId = id;
+                await loadSuggestions();
+              } catch (err) {
+                showToast(`新建失败：${String(err && err.message ? err.message : err)}`, "danger");
+              }
+            });
+
+          if (list)
+            list.addEventListener("click", (e) => {
+              const btn =
+                e.target && e.target.closest ? e.target.closest("[data-sid]") : null;
+              if (!btn) return;
+              const id = btn.getAttribute("data-sid") || "";
+              if (!id || id === sState.selectedId) return;
+              void (async () => {
+                const ok = await confirmDiscardIfDirty("切换建议");
+                if (!ok) return;
+                sState.selectedId = id;
+                const s = sState.items.find((x) => String(x.id) === id) || {};
+                setFormFromSuggestion(s);
+                renderSuggestionsList();
+                renderSuggestionEditor();
+              })();
+            });
+
+          if (!sState._loadedFor || sState._loadedFor !== state.selectedId) {
+            sState._loadedFor = state.selectedId;
+            sState.selectedId = "";
+            void loadSuggestions();
+          } else {
+            renderSuggestionsList();
+            renderSuggestionEditor();
+          }
+        }
+
+        if (tab === "tools") {
+          state.tgState = state.tgState || {
+            exists: false,
+            form: {
+              collapsed: true,
+              bulletsText: "[]",
+              efficiencyText: "[]",
+              status: "draft",
+            },
+          };
+
+          const tg = state.tgState;
+          const notice = $("#tgNotice", editorEl);
+          const collapsedEl = $("#tgCollapsed", editorEl);
+          const bulletsEl = $("#tgBullets", editorEl);
+          const effEl = $("#tgEfficiency", editorEl);
+          const statusEl = $("#tgStatus", editorEl);
+          const saveEl = $("#tgSaveBtn", editorEl);
+
+          function markDirty() {
+            state.dirty = true;
+            const badge = editorEl.querySelector("[data-unsaved-badge]");
+            if (badge) badge.style.display = "inline-flex";
+          }
+
+          async function loadToolsGuide() {
+            if (notice) notice.textContent = "正在加载工具区…";
+            try {
+              const res = await apiFetch(
+                `/admin/tools-guides?problem_id=${encodeURIComponent(state.selectedId)}`
+              );
+              tg.exists = true;
+              tg.form = {
+                collapsed: !!res.collapsed_by_default,
+                bulletsText: jsonText(res.guide_bullets, "[]"),
+                efficiencyText: jsonText(res.efficiency_items, "[]"),
+                status: String(res.status || "draft"),
+              };
+              state.dirty = false;
+              hydrateToolsForm();
+              if (notice) notice.textContent = "已加载（存在记录）。";
+            } catch (err) {
+              const msg = String(err && err.message ? err.message : err);
+              // apiFetch throws Error(text). For 404, backend body is "404 page not found".
+              tg.exists = false;
+              tg.form = {
+                collapsed: true,
+                bulletsText: "[]",
+                efficiencyText: "[]",
+                status: "draft",
+              };
+              state.dirty = false;
+              hydrateToolsForm();
+              if (notice) notice.textContent = `尚未创建（保存时会自动创建）。${msg.includes("404") ? "" : msg}`;
+            }
+          }
+
+          function hydrateToolsForm() {
+            if (collapsedEl) collapsedEl.value = tg.form.collapsed ? "true" : "false";
+            if (bulletsEl) bulletsEl.value = tg.form.bulletsText;
+            if (effEl) effEl.value = tg.form.efficiencyText;
+            if (statusEl) statusEl.value = tg.form.status;
+          }
+
+          if (collapsedEl)
+            collapsedEl.addEventListener("change", () => {
+              tg.form.collapsed = collapsedEl.value === "true";
+              markDirty();
+            });
+          if (bulletsEl)
+            bulletsEl.addEventListener("input", () => {
+              tg.form.bulletsText = String(bulletsEl.value || "");
+              markDirty();
+            });
+          if (effEl)
+            effEl.addEventListener("input", () => {
+              tg.form.efficiencyText = String(effEl.value || "");
+              markDirty();
+            });
+          if (statusEl)
+            statusEl.addEventListener("change", () => {
+              tg.form.status = String(statusEl.value || "draft");
+              markDirty();
+            });
+
+          if (saveEl)
+            saveEl.addEventListener("click", async () => {
+              try {
+                const bulletsTxt = String(tg.form.bulletsText || "").trim();
+                const effTxt = String(tg.form.efficiencyText || "").trim();
+                const bulletsVal = bulletsTxt ? JSON.parse(bulletsTxt) : [];
+                const effVal = effTxt ? JSON.parse(effTxt) : [];
+                const body = {
+                  actor: "admin",
+                  collapsed_by_default: !!tg.form.collapsed,
+                  guide_bullets: bulletsVal,
+                  efficiency_items: effVal,
+                  status: String(tg.form.status || "draft"),
+                };
+                await apiFetch(`/admin/tools-guides/${encodeURIComponent(state.selectedId)}`, {
+                  method: "PUT",
+                  body,
+                });
+                showToast("工具区已保存～", "success");
+                state.dirty = false;
+                await loadToolsGuide();
+              } catch (err) {
+                showToast(`保存失败：${String(err && err.message ? err.message : err)}`, "danger");
+              }
+            });
+
+          if (!tg._loadedFor || tg._loadedFor !== state.selectedId) {
+            tg._loadedFor = state.selectedId;
+            void loadToolsGuide();
+          } else {
+            hydrateToolsForm();
           }
         }
       }
