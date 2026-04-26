@@ -25,6 +25,7 @@ func AdminMetricsCompare(w http.ResponseWriter, r *http.Request) {
 	fromB := parseInt64(r.URL.Query().Get("from_b"), 0)
 	toB := parseInt64(r.URL.Query().Get("to_b"), 0)
 	problemID := r.URL.Query().Get("problem_id")
+	attribution := parseAttribution(r)
 
 	if fromA <= 0 || toA <= 0 || fromB <= 0 || toB <= 0 {
 		http.Error(w, "missing or invalid from_a/to_a/from_b/to_b", http.StatusBadRequest)
@@ -38,12 +39,12 @@ func AdminMetricsCompare(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	a, err := metrics.Aggregate(r.Context(), conn, fromA, toA, problemID)
+	a, err := metrics.Aggregate(r.Context(), conn, fromA, toA, problemID, attribution)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	b, err := metrics.Aggregate(r.Context(), conn, fromB, toB, problemID)
+	b, err := metrics.Aggregate(r.Context(), conn, fromB, toB, problemID, attribution)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

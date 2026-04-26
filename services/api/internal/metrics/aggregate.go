@@ -47,8 +47,13 @@ func Delta(a, b Result) DeltaResult {
 //
 // NOTE: Kept behavior intentionally consistent with the original handler:
 // - problemID only affects feedback_submitted aggregation (not total/uv/by_event_name).
-func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID string) (Result, error) {
+//
+// attribution is parsed by handlers and reserved for future use:
+// - strict (default)
+// - by_request
+func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID, attribution string) (Result, error) {
 	var out Result
+	_ = attribution // reserved for attribution-aware aggregation in a follow-up change.
 
 	// 1) 总量与UV
 	if err := db.QueryRowContext(

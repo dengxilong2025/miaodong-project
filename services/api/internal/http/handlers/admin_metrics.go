@@ -28,6 +28,7 @@ func AdminMetrics(w http.ResponseWriter, r *http.Request) {
 	from := parseInt64(r.URL.Query().Get("from_ts_ms"), now-7*24*3600*1000)
 	to := parseInt64(r.URL.Query().Get("to_ts_ms"), now)
 	problemID := r.URL.Query().Get("problem_id")
+	attribution := parseAttribution(r)
 
 	conn, err := db.Open()
 	if err != nil {
@@ -36,7 +37,7 @@ func AdminMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	res, err := metrics.Aggregate(r.Context(), conn, from, to, problemID)
+	res, err := metrics.Aggregate(r.Context(), conn, from, to, problemID, attribution)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -1,6 +1,9 @@
 package handlers
 
-import "strconv"
+import (
+	"net/http"
+	"strconv"
+)
 
 func parseInt64(s string, def int64) int64 {
 	if s == "" {
@@ -11,4 +14,19 @@ func parseInt64(s string, def int64) int64 {
 		return def
 	}
 	return v
+}
+
+// parseAttribution parses /admin/metrics attribution mode.
+//
+// Supported values:
+// - by_request
+//
+// Default:
+// - strict (includes empty/unknown values)
+func parseAttribution(r *http.Request) string {
+	v := r.URL.Query().Get("attribution")
+	if v == "by_request" {
+		return "by_request"
+	}
+	return "strict"
 }
