@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 // ByEventItem matches the /admin/metrics JSON output field: by_event_name[].
@@ -44,24 +45,23 @@ func Delta(a, b Result) DeltaResult {
 }
 
 // Aggregate reuses the original /admin/metrics SQL (moved here for reuse).
-//
-// NOTE: Kept behavior intentionally consistent with the original handler:
-// - problemID only affects feedback_submitted aggregation (not total/uv/by_event_name).
-//
-// attribution is parsed by handlers and reserved for future use:
-// - strict (default)
-// - by_request
+// It supports two attribution modes when problemID is provided:
+// - strict (default): filter by payload->>'problem_id' = problemID
+// - by_request: attribute by request_id in (subquery of requests that contain problemID within the same window)
 func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID, attribution string) (Result, error) {
 	var out Result
-	_ = attribution // reserved for attribution-aware aggregation in a follow-up change.
+
+	baseArgs := []any{from, to}
+	where, whereArgs := buildWhere(problemID, attribution)
+	args := append(baseArgs, whereArgs...)
 
 	// 1) 总量与UV
 	if err := db.QueryRowContext(
 		ctx,
 		`select count(*)::bigint, count(distinct coalesce(user_id,''))::bigint
 		   from analytics_events
-		  where ts_ms >= $1 and ts_ms <= $2`,
-		from, to,
+		  where ts_ms >= $1 and ts_ms <= $2`+where,
+		args...,
 	).Scan(&out.EventsTotal, &out.DistinctUsers); err != nil {
 		return out, err
 	}
@@ -72,9 +72,10 @@ func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID, attri
 		`select event_name, count(*)::bigint
 		   from analytics_events
 		  where ts_ms >= $1 and ts_ms <= $2
+		  `+where+`
 		  group by event_name
 		  order by count(*) desc`,
-		from, to,
+		args...,
 	)
 	if err != nil {
 		return out, err
@@ -97,13 +98,6 @@ func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID, attri
 	// payload:
 	// - problem_id: string
 	// - helpful: boolean
-	args := []any{from, to}
-	whereProblem := ""
-	if problemID != "" {
-		whereProblem = " and payload->>'problem_id' = $3 "
-		args = append(args, problemID)
-	}
-
 	var fbTotal, fbHelpful int64
 	if err := db.QueryRowContext(
 		ctx,
@@ -112,7 +106,7 @@ func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID, attri
 		    sum(case when (payload->>'helpful') in ('true','false') and (payload->>'helpful')::boolean = true then 1 else 0 end)::bigint as helpful
 		   from analytics_events
 		  where event_name='feedback_submitted'
-		    and ts_ms >= $1 and ts_ms <= $2`+whereProblem,
+		    and ts_ms >= $1 and ts_ms <= $2`+where,
 		args...,
 	).Scan(&fbTotal, &fbHelpful); err != nil {
 		return out, err
@@ -129,4 +123,47 @@ func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID, attri
 	}
 
 	return out, nil
+}
+
+// buildWhere returns an extra SQL "and ..." clause and extra args appended after [$1=from, $2=to].
+//
+// For simplicity and consistency across Aggregate's queries, we always assume:
+// - $1 = from
+// - $2 = to
+// - $3 = problemID (when problemID is non-empty)
+//
+// Unknown attribution values fall back to strict.
+func buildWhere(problemID, attribution string) (string, []any) {
+	const (
+		fromIdx    = 1
+		toIdx      = 2
+		problemIdx = 3
+	)
+
+	if attribution == "by_request" {
+		return buildWhereByRequest(problemID, fromIdx, toIdx, problemIdx)
+	}
+	return buildWhereStrict(problemID, problemIdx)
+}
+
+func buildWhereStrict(problemID string, problemIdx int) (string, []any) {
+	if problemID == "" {
+		return "", nil
+	}
+	return fmt.Sprintf(" and payload->>'problem_id' = $%d ", problemIdx), []any{problemID}
+}
+
+func buildWhereByRequest(problemID string, fromIdx, toIdx, problemIdx int) (string, []any) {
+	if problemID == "" {
+		return "", nil
+	}
+
+	// 子查询同样限定时间窗，避免跨窗归因。
+	return fmt.Sprintf(` and request_id in (
+  select distinct request_id
+    from analytics_events
+   where ts_ms >= $%d and ts_ms <= $%d
+     and payload->>'problem_id' = $%d
+     and request_id is not null and request_id <> ''
+) `, fromIdx, toIdx, problemIdx), []any{problemID}
 }
