@@ -116,6 +116,48 @@ jobs:
           psql "$MIAODONG_DSN" -f /tmp/miaodong-seed.sql
           psql "$MIAODONG_DSN" -c "select count(*) as problems_count from problems;"
 
+      - name: "E2E: content api"
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+          GOFLAGS: -mod=mod
+        run: |
+          set -euo pipefail
+          API_URL="http://127.0.0.1:8080"
+          cd services/api
+          
+          # Start API in background
+          go run ./cmd/api > /tmp/miaodong-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" >/dev/null 2>&1 || true' EXIT
+          
+          # Wait for /v1/health
+          for i in {1..60}; do
+            if curl -fsS "${API_URL}/v1/health" >/dev/null; then
+              echo "api healthy"
+              break
+            fi
+            echo "waiting api... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              echo "api not healthy in time; logs:"
+              tail -n 200 /tmp/miaodong-api.log || true
+              exit 1
+            fi
+          done
+          
+          curl -fsS "${API_URL}/v1/problems?limit=3" > /tmp/problems.json
+          python3 - <<'PY'
+          import json
+          
+          d=json.load(open("/tmp/problems.json"))
+          items=d.get("items",[])
+          assert len(items)==3, items
+          ids=[it.get("id") for it in items]
+          assert any(i in ids for i in ["night_meow","cat_diarrhea","cat_vomit"]), ids
+          assert d.get("content_version")==1, d.get("content_version")
+          print("E2E content api: OK", ids)
+          PY
+
       - name: "E2E: audit log"
         env:
           MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
