@@ -158,6 +158,105 @@ jobs:
           print("E2E content api: OK", ids)
           PY
 
+      - name: "E2E: content_version rollout"
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+          GOFLAGS: -mod=mod
+        run: |
+          set -euo pipefail
+          API_URL="http://127.0.0.1:8080"
+          ADMIN_TOKEN="dev-admin"
+          cd services/api
+          
+          # Start API in background
+          go run ./cmd/api > /tmp/miaodong-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" >/dev/null 2>&1 || true' EXIT
+          
+          # Wait for /v1/health
+          for i in {1..60}; do
+            if curl -fsS "${API_URL}/v1/health" >/dev/null; then
+              echo "api healthy"
+              break
+            fi
+            echo "waiting api... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              echo "api not healthy in time; logs:"
+              tail -n 200 /tmp/miaodong-api.log || true
+              exit 1
+            fi
+          done
+          
+          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" python3 - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          
+          api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
+          admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
+          
+          def http_post_json(path: str, body: dict, headers: dict | None = None) -> dict:
+            url = urllib.parse.urljoin(api_url, path)
+            data = json.dumps(body).encode("utf-8")
+            req = urllib.request.Request(url, method="POST", data=data)
+            req.add_header("Content-Type", "application/json")
+            for k, v in (headers or {}).items():
+              req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              b = resp.read().decode("utf-8")
+              return json.loads(b) if b else {}
+          
+          def http_get_json(path: str, headers: dict | None = None) -> dict:
+            url = urllib.parse.urljoin(api_url, path)
+            req = urllib.request.Request(url, method="GET")
+            for k, v in (headers or {}).items():
+              req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+              return json.loads(resp.read().decode("utf-8"))
+          
+          # 1) publish v1 (100%)
+          r1 = http_post_json(
+            "/admin/release",
+            {"actor": "ci", "rollout_percent": 100, "notes": "ci: publish v1 (100%)"},
+            headers={"X-Admin-Token": admin_token},
+          )
+          cv1 = int(r1.get("content_version", 0) or 0)
+          assert cv1 == 1, r1
+          
+          # 2) publish v2 (10%)
+          r2 = http_post_json(
+            "/admin/release",
+            {"actor": "ci", "rollout_percent": 10, "notes": "ci: publish v2 (10%)"},
+            headers={"X-Admin-Token": admin_token},
+          )
+          cv2 = int(r2.get("content_version", 0) or 0)
+          assert cv2 == 2, r2
+          
+          # 3) 2 different Authorization tokens -> content_version in {1,2}
+          a = http_get_json("/v1/problems?limit=1", headers={"Authorization": "Bearer dev-token-u_a"})
+          b = http_get_json("/v1/problems?limit=1", headers={"Authorization": "Bearer dev-token-u_b"})
+          cva = int(a.get("content_version", 0) or 0)
+          cvb = int(b.get("content_version", 0) or 0)
+          assert cva in (1, 2), a
+          assert cvb in (1, 2), b
+          print("rollout buckets", {"u_a": cva, "u_b": cvb})
+          
+          # 4) rollback to v1
+          rb = http_post_json(
+            "/admin/rollback",
+            {"actor": "ci", "target_content_version": 1, "notes": "ci: rollback to v1"},
+            headers={"X-Admin-Token": admin_token},
+          )
+          assert int(rb.get("content_version", 0) or 0) == 1, rb
+          
+          # 5) assert content_version == 1 after rollback
+          after = http_get_json("/v1/problems?limit=1", headers={"Authorization": "Bearer dev-token-u_a"})
+          assert int(after.get("content_version", 0) or 0) == 1, after
+          print("E2E content_version rollout: OK")
+          PY
+
       - name: "E2E: feedback & retest"
         env:
           MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
