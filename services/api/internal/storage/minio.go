@@ -1,3 +1,6 @@
+//go:build go1.21
+// +build go1.21
+
 package storage
 
 import (
@@ -82,4 +85,3 @@ func (m *MinIO) PresignGet(ctx context.Context, objectKey string, expires time.D
 	}
 	return u.String(), nil
 }
-
