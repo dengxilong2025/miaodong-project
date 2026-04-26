@@ -159,7 +159,6 @@ jobs:
           PY
 
       - name: "E2E: admin content crud"
-        continue-on-error: true
         env:
           MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
           GOFLAGS: -mod=mod
@@ -245,10 +244,9 @@ jobs:
           
           # 3) GET /v1/problems/{problem_id} and assert questions contains the new item
           r3 = curl_json("GET", f"/v1/problems/{problem_id}")
-          bundle = r3.get("bundle") or {}
-          qs = bundle.get("questions") or []
+          qs = r3.get("questions") or []
           if not isinstance(qs, list):
-            raise SystemExit(f"expected bundle.questions to be list, got: {type(qs)}")
+            raise SystemExit(f"expected questions to be list, got: {type(qs)}")
           
           found = None
           for q in qs:
