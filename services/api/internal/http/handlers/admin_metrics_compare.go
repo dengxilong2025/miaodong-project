@@ -52,8 +52,8 @@ func AdminMetricsCompare(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"a":     adminMetricsResponse(fromA, toA, problemID, a),
-		"b":     adminMetricsResponse(fromB, toB, problemID, b),
+		"a":     adminMetricsResponse(fromA, toA, problemID, attribution, a),
+		"b":     adminMetricsResponse(fromB, toB, problemID, attribution, b),
 		"delta": metrics.Delta(a, b),
 	})
 }
