@@ -166,7 +166,6 @@ jobs:
           set -euo pipefail
           API_URL="http://127.0.0.1:8080"
           ADMIN_TOKEN="dev-admin"
-          PROBLEM_ID="night_meow"
           cd services/api
           
           # Start API in background
@@ -189,31 +188,42 @@ jobs:
             fi
           done
           
-          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" PROBLEM_ID="${PROBLEM_ID}" python3 - <<'PY'
+          API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" python3 - <<'PY'
           import json
           import os
           import time
           import urllib.parse
           import urllib.request
+          import urllib.error
           
           api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
           admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
-          problem_id = os.environ.get("PROBLEM_ID", "night_meow")
           
           now_ms = int(time.time() * 1000)
           qid = f"q_ci_admin_{now_ms}"
           qtext = f"ci admin question {now_ms}"
           
-          def http_json(method: str, path: str, body: dict | None = None, headers: dict | None = None) -> dict:
+          def http_json(method, path, body=None, headers=None):
             url = urllib.parse.urljoin(api_url, path)
             data = json.dumps(body).encode("utf-8") if body is not None else None
             req = urllib.request.Request(url, method=method, data=data)
             req.add_header("Content-Type", "application/json")
             for k, v in (headers or {}).items():
               req.add_header(k, v)
-            with urllib.request.urlopen(req, timeout=10) as resp:
-              b = resp.read().decode("utf-8")
-              return json.loads(b) if b else {}
+            try:
+              with urllib.request.urlopen(req, timeout=10) as resp:
+                b = resp.read().decode("utf-8")
+                return json.loads(b) if b else {}
+            except urllib.error.HTTPError as e:
+              b = e.read().decode("utf-8", errors="replace")
+              raise SystemExit(f"HTTP {e.code} {method} {path}: {b}")
+          
+          # Pick one published problem_id from /v1/problems
+          lp = http_json("GET", "/v1/problems?limit=1")
+          items = lp.get("items") or []
+          if not isinstance(items, list) or len(items) < 1 or not isinstance(items[0], dict) or not items[0].get("id"):
+            raise SystemExit(f"expected /v1/problems?limit=1 to return items[0].id, got: {lp}")
+          problem_id = str(items[0]["id"])
           
           # 1) POST /admin/questions (draft)
           r1 = http_json(
