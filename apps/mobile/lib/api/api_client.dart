@@ -15,6 +15,7 @@ class ApiClient {
   final LocalStore store;
   final http.Client _client;
 
+  /// 发送 JSON POST（用于 /v1/auth/anonymous、/v1/audio/upload-url 等）。
   Future<Map<String, dynamic>> postJson(
     String path,
     Map<String, dynamic> body, {
@@ -43,6 +44,20 @@ class ApiClient {
     throw Exception('unexpected json shape');
   }
 
+  /// 直接 PUT bytes 到一个绝对 URL（通常是 presign PUT / api-direct upload_url）。
+  ///
+  /// 注意：这是对“upload_url”的调用，不应携带 Authorization。
+  Future<void> putBytes(
+    String url,
+    Map<String, String> headers,
+    List<int> bytes,
+  ) async {
+    final uri = Uri.parse(url);
+    final res = await _client.put(uri, headers: headers, body: bytes);
+    if (res.statusCode == 200 || res.statusCode == 204) return;
+    throw Exception('PUT failed: HTTP ${res.statusCode}: ${res.body}');
+  }
+
   Future<void> ensureAnonymousAuth() async {
     final existing = await store.getToken();
     if (existing != null && existing.isNotEmpty) return;
@@ -56,4 +71,3 @@ class ApiClient {
     await store.setAuth(userId: userId, token: token);
   }
 }
-

@@ -13,6 +13,9 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   http: ^1.2.2
+  path_provider: ^2.1.4
+  permission_handler: ^11.3.1
+  record: ^5.1.2
   shared_preferences: ^2.2.3
 
 dev_dependencies:
@@ -22,4 +25,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-

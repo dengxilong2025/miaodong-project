@@ -88,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
               FilledButton.icon(
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const RecordScreen()),
+                    MaterialPageRoute(builder: (_) => RecordScreen(api: widget.api)),
                   );
                 },
                 icon: const Icon(Icons.mic_rounded),
@@ -111,4 +111,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-

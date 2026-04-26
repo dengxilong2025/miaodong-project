@@ -28,3 +28,27 @@ flutter run
 启动后会自动调用 `POST /v1/auth/anonymous` 获取匿名 `user_id/token` 并缓存（shared_preferences）。
 
 > 注意：当前仓库环境不包含 Flutter SDK，因此 CI 不会运行 flutter build/analyze。以本机为准。
+
+---
+
+## 录音与上传（4.2）
+
+录音页会执行：
+
+1) 录音（最长 10 秒）
+2) `POST /v1/audio/upload-url`
+3) `PUT upload_url` 上传音频文件
+
+本地联调建议：
+
+```bash
+# 1) 起后端（含 MinIO / Postgres）
+./scripts/dev-up.sh
+
+# 2) 起 Flutter
+cd apps/mobile
+flutter pub get
+flutter run
+```
+
+> Android 模拟器访问宿主机 API：默认使用 `10.0.2.2:8080`（已在 app.dart 内处理）。
