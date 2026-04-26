@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/authctx"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/http/adminui"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/http/handlers"
 )
@@ -53,5 +54,5 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/v1/feedback", handlers.Feedback)
 	mux.HandleFunc("/v1/retest", handlers.Retest)
 
-	return mux
+	return authctx.Middleware(mux)
 }
