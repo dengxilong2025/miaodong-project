@@ -367,7 +367,7 @@ jobs:
           done
 
           RESP="$(curl -fsS -X POST "${API_URL}/v1/audio/upload-url" -H "Content-Type: application/json" -d '{}' )"
-          RESP="${RESP}" python3 - <<'PY'
+          RESP="${RESP}" python3 - <<'PY' > /tmp/miaodong-audio-urls.txt
           import json
           import os
           data = json.loads(os.environ["RESP"])
@@ -379,7 +379,7 @@ jobs:
           assert audio_url, "missing audio_url"
           print(upload_url)
           print(audio_url)
-          PY > /tmp/miaodong-audio-urls.txt
+          PY
 
           UPLOAD_URL="$(python3 -c 'print(open("/tmp/miaodong-audio-urls.txt","r",encoding="utf-8").read().splitlines()[0])')"
           AUDIO_URL="$(python3 -c 'print(open("/tmp/miaodong-audio-urls.txt","r",encoding="utf-8").read().splitlines()[1])')"
