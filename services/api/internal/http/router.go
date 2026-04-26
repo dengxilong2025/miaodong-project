@@ -22,6 +22,8 @@ func NewRouter() http.Handler {
 	// Admin API（MVP：Header token 鉴权）
 	mux.HandleFunc("/admin/problems", handlers.AdminProblems)
 	mux.HandleFunc("/admin/problems/", handlers.AdminProblemByID)
+	mux.HandleFunc("/admin/questions", handlers.AdminQuestions)
+	mux.HandleFunc("/admin/questions/", handlers.AdminQuestionByID)
 	mux.HandleFunc("/admin/releases", handlers.AdminReleases) // GET+POST(/admin/release简化为此)
 	mux.HandleFunc("/admin/release", handlers.AdminReleases)  // 兼容：POST
 	mux.HandleFunc("/admin/rollback", handlers.AdminRollback)
