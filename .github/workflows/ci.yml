@@ -314,6 +314,86 @@ jobs:
           )
           PY
 
+      - name: "E2E: audio minio presign"
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+          GOFLAGS: -mod=mod
+          # Force MinIO presign mode (no fallback)
+          MIAODONG_AUDIO_STORAGE: minio-presign
+          # MinIO config (docker compose service exposes localhost:9000)
+          MIAODONG_MINIO_ENDPOINT: localhost:9000
+          MIAODONG_MINIO_ACCESS_KEY: minio
+          MIAODONG_MINIO_SECRET_KEY: minio123456
+          MIAODONG_MINIO_BUCKET: miaodong-audio
+          MIAODONG_MINIO_USE_SSL: "false"
+        run: |
+          set -euo pipefail
+          API_URL="http://127.0.0.1:8080"
+
+          # Wait for MinIO
+          for i in {1..60}; do
+            if curl -fsS "http://127.0.0.1:9000/minio/health/ready" >/dev/null; then
+              echo "minio ready"
+              break
+            fi
+            echo "waiting minio... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              echo "minio not ready in time" >&2
+              exit 1
+            fi
+          done
+
+          cd services/api
+
+          # Start API in background
+          go run ./cmd/api > /tmp/miaodong-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" >/dev/null 2>&1 || true' EXIT
+
+          # Wait for /v1/health
+          for i in {1..60}; do
+            if curl -fsS "${API_URL}/v1/health" >/dev/null; then
+              echo "api healthy"
+              break
+            fi
+            echo "waiting api... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              echo "api not healthy in time; logs:"
+              tail -n 200 /tmp/miaodong-api.log || true
+              exit 1
+            fi
+          done
+
+          RESP="$(curl -fsS -X POST "${API_URL}/v1/audio/upload-url" -H "Content-Type: application/json" -d '{}' )"
+          RESP="${RESP}" python3 - <<'PY'
+          import json
+          import os
+          data = json.loads(os.environ["RESP"])
+          upload_url = data.get("upload_url")
+          audio_url = data.get("audio_url")
+          storage = data.get("storage")
+          assert storage == "minio-presign", f"expected storage=minio-presign, got {storage!r}"
+          assert upload_url, "missing upload_url"
+          assert audio_url, "missing audio_url"
+          print(upload_url)
+          print(audio_url)
+          PY > /tmp/miaodong-audio-urls.txt
+
+          UPLOAD_URL="$(python3 -c 'print(open("/tmp/miaodong-audio-urls.txt","r",encoding="utf-8").read().splitlines()[0])')"
+          AUDIO_URL="$(python3 -c 'print(open("/tmp/miaodong-audio-urls.txt","r",encoding="utf-8").read().splitlines()[1])')"
+
+          printf "meow-audio-test-%s" "$(date +%s)" > /tmp/sample.bin
+          sha256sum /tmp/sample.bin | cut -d' ' -f1 > /tmp/sample.sha
+
+          curl -fsS -X PUT "${UPLOAD_URL}" --data-binary "@/tmp/sample.bin" -H "Content-Type: application/octet-stream" >/dev/null
+          curl -fsS "${AUDIO_URL}" -o /tmp/out.bin
+          sha256sum /tmp/out.bin | cut -d' ' -f1 > /tmp/out.sha
+
+          diff -u /tmp/sample.sha /tmp/out.sha
+          echo "E2E audio minio presign: OK"
+
       - name: Tear down
         if: always()
         run: |
