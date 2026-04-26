@@ -19,11 +19,18 @@ type InferReq struct {
 	Context  map[string]any `json:"context,omitempty"`
 }
 
-func New(baseURL string) *Client {
+func NewWithTimeout(baseURL string, timeout time.Duration) *Client {
+	if timeout <= 0 {
+		timeout = 3 * time.Second
+	}
 	return &Client{
 		BaseURL: baseURL,
-		HTTP:   &http.Client{Timeout: 3 * time.Second},
+		HTTP:   &http.Client{Timeout: timeout},
 	}
+}
+
+func New(baseURL string) *Client {
+	return NewWithTimeout(baseURL, 3*time.Second)
 }
 
 func (c *Client) Infer(ctx context.Context, req InferReq) (map[string]any, error) {
@@ -47,4 +54,3 @@ func (c *Client) Infer(ctx context.Context, req InferReq) (map[string]any, error
 	}
 	return out, nil
 }
-
