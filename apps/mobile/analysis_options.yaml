@@ -1,0 +1,7 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # v0.1-alpha：尽量保持代码整洁，但不强制过度严格
+    avoid_print: false
+
