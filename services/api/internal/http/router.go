@@ -49,5 +49,9 @@ func NewRouter() http.Handler {
 	// 埋点（App侧）
 	mux.HandleFunc("/v1/analytics/event", handlers.AnalyticsEvent)
 
+	// 反馈闭环（App侧）
+	mux.HandleFunc("/v1/feedback", handlers.Feedback)
+	mux.HandleFunc("/v1/retest", handlers.Retest)
+
 	return mux
 }
