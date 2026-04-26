@@ -24,6 +24,8 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/admin/problems/", handlers.AdminProblemByID)
 	mux.HandleFunc("/admin/questions", handlers.AdminQuestions)
 	mux.HandleFunc("/admin/questions/", handlers.AdminQuestionByID)
+	mux.HandleFunc("/admin/suggestions", handlers.AdminSuggestions)
+	mux.HandleFunc("/admin/suggestions/", handlers.AdminSuggestionByID)
 	mux.HandleFunc("/admin/releases", handlers.AdminReleases) // GET+POST(/admin/release简化为此)
 	mux.HandleFunc("/admin/release", handlers.AdminReleases)  // 兼容：POST
 	mux.HandleFunc("/admin/rollback", handlers.AdminRollback)
