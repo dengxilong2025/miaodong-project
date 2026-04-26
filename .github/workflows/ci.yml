@@ -191,10 +191,8 @@ jobs:
           API_URL="${API_URL}" ADMIN_TOKEN="${ADMIN_TOKEN}" python3 - <<'PY'
           import json
           import os
+          import subprocess
           import time
-          import urllib.parse
-          import urllib.request
-          import urllib.error
           
           api_url = os.environ.get("API_URL", "http://127.0.0.1:8080")
           admin_token = os.environ.get("ADMIN_TOKEN", "dev-admin")
@@ -203,30 +201,25 @@ jobs:
           qid = f"q_ci_admin_{now_ms}"
           qtext = f"ci admin question {now_ms}"
           
-          def http_json(method, path, body=None, headers=None):
-            url = urllib.parse.urljoin(api_url, path)
-            data = json.dumps(body).encode("utf-8") if body is not None else None
-            req = urllib.request.Request(url, method=method, data=data)
-            req.add_header("Content-Type", "application/json")
+          def curl_json(method, path, body=None, headers=None):
+            url = api_url + path
+            cmd = ["curl", "-fsS", "-X", method, url]
             for k, v in (headers or {}).items():
-              req.add_header(k, v)
-            try:
-              with urllib.request.urlopen(req, timeout=10) as resp:
-                b = resp.read().decode("utf-8")
-                return json.loads(b) if b else {}
-            except urllib.error.HTTPError as e:
-              b = e.read().decode("utf-8", errors="replace")
-              raise SystemExit(f"HTTP {e.code} {method} {path}: {b}")
+              cmd += ["-H", f"{k}: {v}"]
+            if body is not None:
+              cmd += ["-H", "Content-Type: application/json", "-d", json.dumps(body)]
+            out = subprocess.check_output(cmd, text=True)
+            return json.loads(out) if out else {}
           
           # Pick one published problem_id from /v1/problems
-          lp = http_json("GET", "/v1/problems?limit=1")
+          lp = curl_json("GET", "/v1/problems?limit=1")
           items = lp.get("items") or []
           if not isinstance(items, list) or len(items) < 1 or not isinstance(items[0], dict) or not items[0].get("id"):
             raise SystemExit(f"expected /v1/problems?limit=1 to return items[0].id, got: {lp}")
           problem_id = str(items[0]["id"])
           
           # 1) POST /admin/questions (draft)
-          r1 = http_json(
+          r1 = curl_json(
             "POST",
             "/admin/questions",
             {
@@ -241,7 +234,7 @@ jobs:
           assert r1.get("id") == qid, r1
           
           # 2) PATCH /admin/questions/{id} -> published
-          r2 = http_json(
+          r2 = curl_json(
             "PATCH",
             f"/admin/questions/{qid}",
             {"actor": "ci", "status": "published"},
@@ -250,7 +243,7 @@ jobs:
           assert r2.get("ok") is True, r2
           
           # 3) GET /v1/problems/{problem_id} and assert questions contains the new item
-          r3 = http_json("GET", f"/v1/problems/{problem_id}")
+          r3 = curl_json("GET", f"/v1/problems/{problem_id}")
           bundle = r3.get("bundle") or {}
           qs = bundle.get("questions") or []
           if not isinstance(qs, list):
@@ -263,7 +256,10 @@ jobs:
               break
           
           if not found:
-            raise SystemExit(f"expected question {qid} in bundle.questions, got ids={[it.get('id') for it in qs if isinstance(it, dict)]}")
+            raise SystemExit(
+              f"expected question {qid} in bundle.questions, got ids="
+              f"{[it.get('id') for it in qs if isinstance(it, dict)]}"
+            )
           
           assert found.get("status") == "published", found
           assert found.get("text") == qtext, found
