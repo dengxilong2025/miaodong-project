@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../recording/recorder.dart';
+import 'result_screen.dart';
 import '../upload/uploader.dart';
 
 enum RecordPageState { idle, recording, recorded, uploading, uploaded }
@@ -25,6 +26,7 @@ class _RecordScreenState extends State<RecordScreen> {
   RecordPageState _state = RecordPageState.idle;
   String? _filePath;
   String? _audioId;
+  String? _audioUrl;
   String? _lastError;
 
   int _secondsLeft = 10;
@@ -65,6 +67,7 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() {
       _lastError = null;
       _audioId = null;
+      _audioUrl = null;
       _filePath = null;
       _state = RecordPageState.recording;
     });
@@ -95,6 +98,7 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() {
       _filePath = null;
       _audioId = null;
+      _audioUrl = null;
       _lastError = null;
       _state = RecordPageState.idle;
       _secondsLeft = 10;
@@ -119,6 +123,7 @@ class _RecordScreenState extends State<RecordScreen> {
       await _uploader.uploadFile(ins, File(path));
       setState(() {
         _audioId = ins.audioId;
+        _audioUrl = ins.audioUrl;
         _state = RecordPageState.uploaded;
       });
       _snack('上传成功：${ins.audioId}');
@@ -133,6 +138,7 @@ class _RecordScreenState extends State<RecordScreen> {
     final isRecording = _state == RecordPageState.recording;
     final canUpload = _state == RecordPageState.recorded || _state == RecordPageState.uploaded;
     final uploading = _state == RecordPageState.uploading;
+    final canAnalyze = _state == RecordPageState.uploaded && (_audioUrl?.isNotEmpty ?? false);
 
     return Scaffold(
       appBar: AppBar(title: const Text('录音')),
@@ -171,6 +177,8 @@ class _RecordScreenState extends State<RecordScreen> {
                       Text('filePath：${_filePath ?? "-"}'),
                       const SizedBox(height: 6),
                       Text('audio_id：${_audioId ?? "-"}'),
+                      const SizedBox(height: 6),
+                      Text('audio_url：${_audioUrl ?? "-"}'),
                       if (_lastError != null) ...[
                         const SizedBox(height: 10),
                         Text(
@@ -211,13 +219,29 @@ class _RecordScreenState extends State<RecordScreen> {
                         : const Icon(Icons.cloud_upload_rounded),
                     label: Text(uploading ? '上传中…' : '上传'),
                   ),
+                  FilledButton.icon(
+                    onPressed: canAnalyze
+                        ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ResultScreen(
+                                  api: widget.api,
+                                  audioUrl: _audioUrl!,
+                                  audioId: _audioId,
+                                ),
+                              ),
+                            );
+                          }
+                        : null,
+                    icon: const Icon(Icons.analytics_rounded),
+                    label: const Text('开始分析'),
+                  ),
                 ],
               ),
 
               const SizedBox(height: 18),
-              const Text(
-                '下一步（4.3）：上传成功后，将用 audio_id/audio_url 调用 /v1/inference 生成结果页。',
-              ),
+              const Text('上传成功后，点击「开始分析」生成结果页。'),
             ],
           ),
         ),
