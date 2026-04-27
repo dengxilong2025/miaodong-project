@@ -11,9 +11,10 @@ import '../upload/uploader.dart';
 enum RecordPageState { idle, recording, recorded, uploading, uploaded }
 
 class RecordScreen extends StatefulWidget {
-  const RecordScreen({super.key, required this.api});
+  const RecordScreen({super.key, required this.api, this.problemId});
 
   final ApiClient api;
+  final String? problemId;
 
   @override
   State<RecordScreen> createState() => _RecordScreenState();
@@ -176,6 +177,8 @@ class _RecordScreenState extends State<RecordScreen> {
                       const SizedBox(height: 6),
                       Text('filePath：${_filePath ?? "-"}'),
                       const SizedBox(height: 6),
+                      Text('problem_id：${widget.problemId ?? "-"}'),
+                      const SizedBox(height: 6),
                       Text('audio_id：${_audioId ?? "-"}'),
                       const SizedBox(height: 6),
                       Text('audio_url：${_audioUrl ?? "-"}'),
@@ -229,6 +232,7 @@ class _RecordScreenState extends State<RecordScreen> {
                                   api: widget.api,
                                   audioUrl: _audioUrl!,
                                   audioId: _audioId,
+                                  problemId: widget.problemId,
                                 ),
                               ),
                             );

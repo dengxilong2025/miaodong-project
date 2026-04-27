@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../inference/inference_client.dart';
+import 'problem_detail_screen.dart';
 
 enum ResultPageState { loading, success, degraded, error }
 
@@ -13,11 +14,13 @@ class ResultScreen extends StatefulWidget {
     required this.api,
     required this.audioUrl,
     this.audioId,
+    this.problemId,
   });
 
   final ApiClient api;
   final String audioUrl;
   final String? audioId;
+  final String? problemId;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -125,10 +128,30 @@ class _ResultScreenState extends State<ResultScreen> {
               const SizedBox(height: 8),
               Text(_error ?? '未知错误', style: const TextStyle(color: Colors.red)),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _runInference,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('重试'),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _runInference,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('重试'),
+                  ),
+                  if (widget.problemId != null)
+                    OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProblemDetailScreen(
+                              api: widget.api,
+                              problemId: widget.problemId!,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('查看问题详情'),
+                    ),
+                ],
               ),
             ],
           ),
@@ -170,11 +193,20 @@ class _ResultScreenState extends State<ResultScreen> {
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('重试'),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => _snack('问题库入口：下一步接入（先这样喵～）'),
-                    icon: const Icon(Icons.support_agent_rounded),
-                    label: const Text('去问题库'),
-                  ),
+                  if (widget.problemId != null)
+                    OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProblemDetailScreen(
+                              api: widget.api,
+                              problemId: widget.problemId!,
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('查看问题详情'),
+                    ),
                 ],
               ),
               const SizedBox(height: 14),
@@ -248,6 +280,20 @@ class _ResultScreenState extends State<ResultScreen> {
                   onPressed: _sendingFeedback ? null : () => _feedback(false),
                   child: const Text('没用'),
                 ),
+                if (widget.problemId != null)
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ProblemDetailScreen(
+                            api: widget.api,
+                            problemId: widget.problemId!,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('查看问题详情'),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.replay_rounded),
@@ -309,4 +355,3 @@ class _DebugSection extends StatelessWidget {
     );
   }
 }
-

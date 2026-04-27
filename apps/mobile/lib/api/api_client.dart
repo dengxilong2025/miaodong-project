@@ -44,6 +44,29 @@ class ApiClient {
     throw Exception('unexpected json shape');
   }
 
+  Future<Map<String, dynamic>> getJson(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final h = <String, String>{
+      'Content-Type': 'application/json',
+      ...?headers,
+    };
+    final token = await store.getToken();
+    if (token != null && token.isNotEmpty) {
+      h['Authorization'] = 'Bearer $token';
+    }
+
+    final res = await _client.get(uri, headers: h);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+    final decoded = jsonDecode(res.body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    throw Exception('unexpected json shape');
+  }
+
   /// 直接 PUT bytes 到一个绝对 URL（通常是 presign PUT / api-direct upload_url）。
   ///
   /// 注意：这是对“upload_url”的调用，不应携带 Authorization。
