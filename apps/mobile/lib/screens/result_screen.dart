@@ -1,12 +1,55 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../api/api_client.dart';
 import '../inference/inference_client.dart';
 import 'problem_detail_screen.dart';
 
 enum ResultPageState { loading, success, degraded, error }
+
+const String defaultShareTemplate = '我家猫这次更像：{label}（{confidence}%）。来喵懂试试 #喵懂 #喵测';
+
+int? formatConfidencePercent(Object? confidenceRaw) {
+  if (confidenceRaw == null) return null;
+  final confidence = switch (confidenceRaw) {
+    num value => value.toDouble(),
+    _ => double.tryParse(confidenceRaw.toString()),
+  };
+  if (confidence == null) return null;
+  if (confidence >= 0 && confidence <= 1) {
+    return (confidence * 100).round();
+  }
+  return confidence.round();
+}
+
+String buildShareTextFromTemplate({
+  required String template,
+  required String? label,
+  required int? confidencePercent,
+}) {
+  final resolvedLabel = (label == null || label.trim().isEmpty) ? '未知' : label.trim();
+  final resolvedConfidence = confidencePercent?.toString() ?? '-';
+
+  var text = template
+      .replaceAll('{label}', resolvedLabel)
+      .replaceAll('{confidence}', resolvedConfidence)
+      .trim();
+
+  final hasMiaodongTag = text.contains('#喵懂');
+  final hasMiaoceTag = text.contains('#喵测');
+  if (!hasMiaodongTag || !hasMiaoceTag) {
+    final missingTags = <String>[
+      if (!hasMiaodongTag) '#喵懂',
+      if (!hasMiaoceTag) '#喵测',
+    ];
+    text = '${text.trimRight()} ${missingTags.join(' ')}'.trim();
+  }
+
+  return text;
+}
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({
@@ -91,6 +134,67 @@ class _ResultScreenState extends State<ResultScreen> {
       _snack('反馈失败：$e');
     } finally {
       if (mounted) setState(() => _sendingFeedback = false);
+    }
+  }
+
+  Future<String?> _fetchShareTextTemplate() async {
+    final problemId = widget.problemId;
+    if (problemId == null || problemId.isEmpty) return null;
+
+    try {
+      final res = await widget.api.getJson(
+        '/v1/templates/result?problem_id=${Uri.encodeQueryComponent(problemId)}',
+      );
+      final directShareAsset = res['share_asset'];
+      if (directShareAsset is Map) {
+        final template = directShareAsset['share_text_template']?.toString().trim();
+        if (template != null && template.isNotEmpty) return template;
+      }
+
+      final nestedBundle = res['bundle'];
+      if (nestedBundle is Map) {
+        final nestedShareAsset = nestedBundle['share_asset'];
+        if (nestedShareAsset is Map) {
+          final template = nestedShareAsset['share_text_template']?.toString().trim();
+          if (template != null && template.isNotEmpty) return template;
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+
+    return null;
+  }
+
+  Future<String> _buildShareText() async {
+    final primary = _resp?['primary_intent'];
+    final label = (primary is Map ? (primary['label'] ?? primary['name']) : primary)?.toString();
+    final confidencePercent = formatConfidencePercent(primary is Map ? primary['confidence'] : null);
+    final template = await _fetchShareTextTemplate() ?? defaultShareTemplate;
+
+    return buildShareTextFromTemplate(
+      template: template,
+      label: label,
+      confidencePercent: confidencePercent,
+    );
+  }
+
+  Future<void> _copyShareText() async {
+    try {
+      final text = await _buildShareText();
+      await Clipboard.setData(ClipboardData(text: text));
+      _snack('已复制分享文案');
+    } catch (e) {
+      _snack('复制分享文案失败：$e');
+    }
+  }
+
+  Future<void> _systemShare() async {
+    try {
+      final text = await _buildShareText();
+      await SharePlus.instance.share(ShareParams(text: text));
+    } catch (e) {
+      _snack('调起系统分享失败：$e');
     }
   }
 
@@ -218,8 +322,7 @@ class _ResultScreenState extends State<ResultScreen> {
       case ResultPageState.success:
         final primary = resp?['primary_intent'];
         final label = (primary is Map ? (primary['label'] ?? primary['name']) : primary)?.toString() ?? '-';
-        final confidenceRaw = (primary is Map ? primary['confidence'] : null);
-        final confidence = double.tryParse((confidenceRaw ?? '').toString());
+        final confidence = formatConfidencePercent(primary is Map ? primary['confidence'] : null);
 
         final explanationsRaw = resp?['explanations'];
         final explanations = (explanationsRaw is List) ? explanationsRaw : const [];
@@ -241,7 +344,7 @@ class _ResultScreenState extends State<ResultScreen> {
                     Text('primary_intent：$label', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 6),
                     Text(
-                      'confidence：${confidence == null ? '-' : '${(confidence * 100).toStringAsFixed(0)}%'}',
+                      'confidence：${confidence == null ? '-' : '$confidence%'}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -279,6 +382,14 @@ class _ResultScreenState extends State<ResultScreen> {
                 OutlinedButton(
                   onPressed: _sendingFeedback ? null : () => _feedback(false),
                   child: const Text('没用'),
+                ),
+                OutlinedButton(
+                  onPressed: _copyShareText,
+                  child: const Text('复制分享文案'),
+                ),
+                OutlinedButton(
+                  onPressed: _systemShare,
+                  child: const Text('系统分享'),
                 ),
                 if (widget.problemId != null)
                   OutlinedButton(
