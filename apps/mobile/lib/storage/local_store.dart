@@ -4,24 +4,39 @@ class LocalStore {
   static const _kUserId = 'user_id';
   static const _kToken = 'token';
 
-  Future<String?> getUserId() async {
+  Future<String?> getString(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getString(_kUserId);
+    final v = prefs.getString(key);
     if (v == null || v.isEmpty) return null;
     return v;
+  }
+
+  Future<void> setString(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
+  }
+
+  Future<bool?> getBool(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key);
+  }
+
+  Future<void> setBool(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
+
+  Future<String?> getUserId() async {
+    return getString(_kUserId);
   }
 
   Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getString(_kToken);
-    if (v == null || v.isEmpty) return null;
-    return v;
+    return getString(_kToken);
   }
 
   Future<void> setAuth({required String userId, required String token}) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kUserId, userId);
-    await prefs.setString(_kToken, token);
+    await setString(_kUserId, userId);
+    await setString(_kToken, token);
   }
 
   Future<void> clear() async {
@@ -30,4 +45,3 @@ class LocalStore {
     await prefs.remove(_kToken);
   }
 }
-

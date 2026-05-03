@@ -24,5 +24,16 @@ class InferenceClient {
       'helpful': helpful,
     });
   }
-}
 
+  Future<Map<String, dynamic>> submitRetest({
+    required String problemId,
+    required String baselineRequestId,
+    required String currentRequestId,
+  }) async {
+    return api.postJson('/v1/retest', {
+      'problem_id': problemId,
+      'baseline_request_id': baselineRequestId,
+      'current_request_id': currentRequestId,
+    });
+  }
+}
