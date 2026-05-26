@@ -5,15 +5,22 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../recording/recorder.dart';
+import '../telemetry/telemetry_client.dart';
 import 'result_screen.dart';
 import '../upload/uploader.dart';
 
 enum RecordPageState { idle, recording, recorded, uploading, uploaded }
 
 class RecordScreen extends StatefulWidget {
-  const RecordScreen({super.key, required this.api, this.problemId});
+  const RecordScreen({
+    super.key,
+    required this.api,
+    required this.telemetry,
+    this.problemId,
+  });
 
   final ApiClient api;
+  final TelemetryClient telemetry;
   final String? problemId;
 
   @override
@@ -49,6 +56,8 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() => _lastError = e.toString());
     _snack('出错了：$e');
   }
+
+  String _entry() => (widget.problemId != null && widget.problemId!.isNotEmpty) ? 'problem_detail' : 'home';
 
   void _startTick() {
     _tick?.cancel();
@@ -118,10 +127,35 @@ class _RecordScreenState extends State<RecordScreen> {
       _state = RecordPageState.uploading;
     });
 
+    String? attemptedAudioId;
     try {
+      final durationMs = (10 - _secondsLeft) * 1000;
+      await widget.telemetry.track(
+        'upload_url_requested',
+        payload: {
+          'duration_ms': durationMs,
+          'content_type': 'audio/m4a',
+          'problem_id': widget.problemId,
+          'entry': _entry(),
+        },
+      );
+
       // v0.1-alpha：upload-url 请求体可为空；这里带 duration_ms 以便后续演进
-      final ins = await _uploader.getUploadUrl(durationMs: (10 - _secondsLeft) * 1000);
-      await _uploader.uploadFile(ins, File(path));
+      final ins = await _uploader.getUploadUrl(durationMs: durationMs);
+      attemptedAudioId = ins.audioId;
+      final file = File(path);
+      final bytes = await file.length();
+      await _uploader.uploadFile(ins, file);
+
+      await widget.telemetry.track(
+        'audio_upload_succeeded',
+        payload: {
+          'audio_id': ins.audioId,
+          'bytes': bytes,
+          'problem_id': widget.problemId,
+        },
+      );
+
       setState(() {
         _audioId = ins.audioId;
         _audioUrl = ins.audioUrl;
@@ -129,6 +163,14 @@ class _RecordScreenState extends State<RecordScreen> {
       });
       _snack('上传成功：${ins.audioId}');
     } catch (e) {
+      await widget.telemetry.track(
+        'audio_upload_failed',
+        payload: {
+          'audio_id': attemptedAudioId ?? _audioId,
+          'error_code': e.toString(),
+          'problem_id': widget.problemId,
+        },
+      );
       setState(() => _state = RecordPageState.recorded);
       _setError(e);
     }
@@ -230,6 +272,7 @@ class _RecordScreenState extends State<RecordScreen> {
                               MaterialPageRoute(
                                 builder: (_) => ResultScreen(
                                   api: widget.api,
+                                  telemetry: widget.telemetry,
                                   audioUrl: _audioUrl!,
                                   audioId: _audioId,
                                   problemId: widget.problemId,

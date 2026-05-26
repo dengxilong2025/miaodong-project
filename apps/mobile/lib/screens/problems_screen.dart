@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
+import '../telemetry/telemetry_client.dart';
 import 'problem_detail_screen.dart';
 
 class ProblemsScreen extends StatefulWidget {
-  const ProblemsScreen({super.key, required this.api});
+  const ProblemsScreen({super.key, required this.api, required this.telemetry});
 
   final ApiClient api;
+  final TelemetryClient telemetry;
 
   @override
   State<ProblemsScreen> createState() => _ProblemsScreenState();
@@ -48,6 +50,12 @@ class _ProblemsScreenState extends State<ProblemsScreen> {
         _items = items;
         _loading = false;
       });
+
+      await widget.telemetry.track(
+        'problem_list_viewed',
+        contentVersion: cv,
+        payload: const {'source': 'tab'},
+      );
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -115,6 +123,7 @@ class _ProblemsScreenState extends State<ProblemsScreen> {
                                 MaterialPageRoute(
                                   builder: (_) => ProblemDetailScreen(
                                     api: widget.api,
+                                    telemetry: widget.telemetry,
                                     problemId: id,
                                   ),
                                 ),

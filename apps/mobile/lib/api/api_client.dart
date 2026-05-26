@@ -93,4 +93,8 @@ class ApiClient {
     }
     await store.setAuth(userId: userId, token: token);
   }
+
+  Future<void> postAnalyticsEvent(Map<String, dynamic> body) async {
+    await postJson('/v1/analytics/event', body);
+  }
 }

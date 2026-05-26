@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
+import '../telemetry/telemetry_client.dart';
 import 'record_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.api});
+  const HomeScreen({super.key, required this.api, required this.telemetry});
 
   final ApiClient api;
+  final TelemetryClient telemetry;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -35,6 +37,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _userId = uid;
         _loading = false;
       });
+
+      // v0.1-alpha：登录成功后记录 app_open，并 flush 历史队列。
+      await widget.telemetry.track('app_open');
+      await widget.telemetry.flush();
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -88,7 +94,9 @@ class _HomeScreenState extends State<HomeScreen> {
               FilledButton.icon(
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => RecordScreen(api: widget.api)),
+                    MaterialPageRoute(
+                      builder: (_) => RecordScreen(api: widget.api, telemetry: widget.telemetry),
+                    ),
                   );
                 },
                 icon: const Icon(Icons.mic_rounded),

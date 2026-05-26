@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../api/api_client.dart';
 import '../inference/inference_client.dart';
 import '../retest/retest_store.dart';
+import '../telemetry/telemetry_client.dart';
 import 'problem_detail_screen.dart';
 
 enum ResultPageState { loading, success, degraded, error }
@@ -83,12 +84,14 @@ class ResultScreen extends StatefulWidget {
   const ResultScreen({
     super.key,
     required this.api,
+    required this.telemetry,
     required this.audioUrl,
     this.audioId,
     this.problemId,
   });
 
   final ApiClient api;
+  final TelemetryClient telemetry;
   final String audioUrl;
   final String? audioId;
   final String? problemId;
@@ -162,18 +165,74 @@ class _ResultScreenState extends State<ResultScreen> {
 
     try {
       final ctx = <String, dynamic>{'time_of_day': _timeOfDay()};
+
+      await widget.telemetry.track(
+        'inference_started',
+        payload: {
+          'entry': 'record',
+          'problem_id': widget.problemId,
+          'context_keys': ctx.keys.toList(),
+        },
+      );
+
       final res = await _inference.infer(audioUrl: widget.audioUrl, context: ctx);
       final degraded = (res['degraded'] == true) || (res['degraded']?.toString() == 'true');
       final currentAt =
           res['created_at']?.toString().trim().isNotEmpty == true
               ? res['created_at'].toString()
               : DateTime.now().toUtc().toIso8601String();
+
+      final requestId = res['request_id']?.toString();
+      final primary = _asMap(res['primary_intent']);
+      final primaryIntentCode = _primaryIntentCodeFrom(primary);
+      final modelVersion = (res['model_version'] ?? res['model'] ?? res['model_id'])?.toString();
+      final confidence = primary?['confidence'];
+
       setState(() {
         _resp = res;
         _state = degraded ? ResultPageState.degraded : ResultPageState.success;
         _currentResultAtIso = currentAt;
       });
+
+      if (degraded) {
+        final degradedReason = (res['degraded_reason'] ?? res['reason'] ?? '').toString();
+        await widget.telemetry.track(
+          'inference_failed',
+          requestId: requestId,
+          payload: {
+            'degraded': true,
+            'degraded_reason': degradedReason,
+          },
+        );
+      } else {
+        await widget.telemetry.track(
+          'inference_succeeded',
+          requestId: requestId,
+          payload: {
+            'model_version': modelVersion,
+            'primary_intent_code': primaryIntentCode,
+            'confidence': confidence,
+          },
+        );
+      }
+
+      await widget.telemetry.track(
+        'result_page_viewed',
+        requestId: requestId,
+        payload: {
+          'problem_id': widget.problemId,
+          'primary_intent_code': primaryIntentCode,
+        },
+      );
     } catch (e) {
+      await widget.telemetry.track(
+        'inference_failed',
+        payload: {
+          'degraded': false,
+          'error': e.toString(),
+          'problem_id': widget.problemId,
+        },
+      );
       setState(() {
         _error = e.toString();
         _state = ResultPageState.error;
@@ -183,10 +242,33 @@ class _ResultScreenState extends State<ResultScreen> {
 
   String? _requestId() => _resp?['request_id']?.toString();
 
+  String? _primaryIntentCodeFrom(Map<String, dynamic>? primary) {
+    if (primary == null) return null;
+    final candidates = [
+      primary['code'],
+      primary['intent_code'],
+      primary['primary_intent_code'],
+      primary['id'],
+      primary['name'],
+      primary['label'],
+    ];
+    for (final c in candidates) {
+      final s = c?.toString().trim();
+      if (s != null && s.isNotEmpty) return s;
+    }
+    return null;
+  }
+
   Map<String, dynamic>? _primaryIntent() {
     final primary = _resp?['primary_intent'];
     if (primary is Map<String, dynamic>) return primary;
     if (primary is Map) return primary.cast<String, dynamic>();
+    return null;
+  }
+
+  Map<String, dynamic>? _asMap(dynamic v) {
+    if (v is Map<String, dynamic>) return v;
+    if (v is Map) return Map<String, dynamic>.from(v);
     return null;
   }
 
@@ -289,12 +371,38 @@ class _ResultScreenState extends State<ResultScreen> {
 
     setState(() => _submittingRetest = true);
     try {
+      await widget.telemetry.track(
+        'retest_started',
+        requestId: currentRequestId,
+        payload: {
+          'problem_id': problemId,
+          'baseline_request_id': baseline.requestId,
+        },
+      );
+
       await _inference.submitRetest(
         problemId: problemId,
         baselineRequestId: baseline.requestId,
         currentRequestId: currentRequestId,
       );
       _snack('已提交复测记录');
+
+      final baselinePercent = formatConfidencePercent(baseline.confidence);
+      final currentPercent = formatConfidencePercent(_currentConfidenceValue());
+      final diff =
+          (baselinePercent != null && currentPercent != null) ? (currentPercent - baselinePercent) : null;
+      final direction = diff == null ? null : (diff == 0 ? 'same' : (diff > 0 ? 'up' : 'down'));
+
+      await widget.telemetry.track(
+        'retest_completed',
+        requestId: currentRequestId,
+        payload: {
+          'problem_id': problemId,
+          'baseline_request_id': baseline.requestId,
+          'delta_direction': direction,
+          'delta_value': diff,
+        },
+      );
 
       final unlocked = await _retestStore.isFirstRetestUnlocked();
       if (!unlocked) {
@@ -319,6 +427,14 @@ class _ResultScreenState extends State<ResultScreen> {
     setState(() => _sendingFeedback = true);
     try {
       await _inference.sendFeedback(requestId: rid, helpful: helpful);
+      await widget.telemetry.track(
+        'feedback_submitted',
+        requestId: rid,
+        payload: {
+          'helpful': helpful,
+          'problem_id': widget.problemId,
+        },
+      );
       _snack('已反馈，感谢～');
     } catch (e) {
       _snack('反馈失败：$e');
@@ -370,9 +486,26 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Future<void> _copyShareText() async {
+    final rid = _requestId();
+    await widget.telemetry.track(
+      'share_clicked',
+      requestId: rid,
+      payload: const {
+        'share_channel': 'copy',
+        'asset_type': 'text',
+      },
+    );
     try {
       final text = await _buildShareText();
       await Clipboard.setData(ClipboardData(text: text));
+      await widget.telemetry.track(
+        'share_completed',
+        requestId: rid,
+        payload: const {
+          'share_channel': 'copy',
+          'asset_type': 'text',
+        },
+      );
       _snack('已复制分享文案');
     } catch (e) {
       _snack('复制分享文案失败：$e');
@@ -380,9 +513,26 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Future<void> _systemShare() async {
+    final rid = _requestId();
+    await widget.telemetry.track(
+      'share_clicked',
+      requestId: rid,
+      payload: const {
+        'share_channel': 'system',
+        'asset_type': 'text',
+      },
+    );
     try {
       final text = await _buildShareText();
       await SharePlus.instance.share(ShareParams(text: text));
+      await widget.telemetry.track(
+        'share_completed',
+        requestId: rid,
+        payload: const {
+          'share_channel': 'system',
+          'asset_type': 'text',
+        },
+      );
     } catch (e) {
       _snack('调起系统分享失败：$e');
     }
@@ -493,6 +643,7 @@ class _ResultScreenState extends State<ResultScreen> {
                           MaterialPageRoute(
                             builder: (_) => ProblemDetailScreen(
                               api: widget.api,
+                              telemetry: widget.telemetry,
                               problemId: widget.problemId!,
                             ),
                           ),
@@ -549,6 +700,7 @@ class _ResultScreenState extends State<ResultScreen> {
                           MaterialPageRoute(
                             builder: (_) => ProblemDetailScreen(
                               api: widget.api,
+                              telemetry: widget.telemetry,
                               problemId: widget.problemId!,
                             ),
                           ),
@@ -688,6 +840,7 @@ class _ResultScreenState extends State<ResultScreen> {
                         MaterialPageRoute(
                           builder: (_) => ProblemDetailScreen(
                             api: widget.api,
+                            telemetry: widget.telemetry,
                             problemId: widget.problemId!,
                           ),
                         ),

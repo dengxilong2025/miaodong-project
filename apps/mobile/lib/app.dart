@@ -7,6 +7,7 @@ import 'screens/home_screen.dart';
 import 'screens/me_screen.dart';
 import 'screens/problems_screen.dart';
 import 'storage/local_store.dart';
+import 'telemetry/telemetry_client.dart';
 
 class MiaodongApp extends StatelessWidget {
   const MiaodongApp({super.key});
@@ -40,6 +41,7 @@ class _AppShellState extends State<AppShell> {
     baseUrl: _defaultBaseUrl(),
     store: _store,
   );
+  late final TelemetryClient _telemetry = TelemetryClient(api: _api, store: _store);
 
   String _defaultBaseUrl() {
     // 开发期默认地址（本地 API 服务）
@@ -54,8 +56,8 @@ class _AppShellState extends State<AppShell> {
       body: IndexedStack(
         index: _index,
         children: [
-          HomeScreen(api: _api),
-          ProblemsScreen(api: _api),
+          HomeScreen(api: _api, telemetry: _telemetry),
+          ProblemsScreen(api: _api, telemetry: _telemetry),
           MeScreen(api: _api, store: _store),
         ],
       ),
@@ -71,4 +73,3 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
-
