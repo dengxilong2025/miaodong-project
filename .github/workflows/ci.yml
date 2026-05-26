@@ -614,7 +614,42 @@ jobs:
               "payload": {"problem_id": problem_id},
             },
             {
+              "event_name": "inference_succeeded",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {},
+            },
+            {
               "event_name": "result_page_viewed",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {},
+            },
+            {
+              "event_name": "share_clicked",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {},
+            },
+            {
+              "event_name": "share_completed",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {},
+            },
+            {
+              "event_name": "retest_completed",
+              "ts_ms": now_ms,
+              "user_id": "u_ci",
+              "request_id": request_id,
+              "payload": {},
+            },
+            {
+              "event_name": "tools_section_expanded",
               "ts_ms": now_ms,
               "user_id": "u_ci",
               "request_id": request_id,
@@ -653,6 +688,71 @@ jobs:
               f"expected by_request.events_total > strict.events_total, got: "
               f"{by_request.get('events_total')} <= {strict.get('events_total')}"
             )
+
+          def assert_kpis_shape(obj: dict):
+            kpis = obj.get("kpis")
+            if not isinstance(kpis, dict):
+              raise SystemExit(f"expected kpis to be object, got: {type(kpis)} {kpis!r}")
+
+            inf = kpis.get("inference")
+            if not isinstance(inf, dict):
+              raise SystemExit(f"expected kpis.inference to be object, got: {type(inf)} {inf!r}")
+            for key in ["started", "succeeded", "failed", "success_rate"]:
+              if key not in inf:
+                raise SystemExit(f"missing kpis.inference.{key}: {inf!r}")
+              if not isinstance(inf[key], (int, float)):
+                raise SystemExit(f"expected kpis.inference.{key} to be number, got: {type(inf[key])} {inf[key]!r}")
+
+            share = kpis.get("share")
+            if not isinstance(share, dict):
+              raise SystemExit(f"expected kpis.share to be object, got: {type(share)} {share!r}")
+            for key in ["clicked", "completed", "completed_rate"]:
+              if key not in share:
+                raise SystemExit(f"missing kpis.share.{key}: {share!r}")
+              if not isinstance(share[key], (int, float)):
+                raise SystemExit(f"expected kpis.share.{key} to be number, got: {type(share[key])} {share[key]!r}")
+
+            retest = kpis.get("retest")
+            if not isinstance(retest, dict):
+              raise SystemExit(f"expected kpis.retest to be object, got: {type(retest)} {retest!r}")
+            for key in ["started", "completed", "completed_rate"]:
+              if key not in retest:
+                raise SystemExit(f"missing kpis.retest.{key}: {retest!r}")
+              if not isinstance(retest[key], (int, float)):
+                raise SystemExit(f"expected kpis.retest.{key} to be number, got: {type(retest[key])} {retest[key]!r}")
+
+            tools = kpis.get("tools")
+            if not isinstance(tools, dict):
+              raise SystemExit(f"expected kpis.tools to be object, got: {type(tools)} {tools!r}")
+            for key in ["expanded", "expanded_rate"]:
+              if key not in tools:
+                raise SystemExit(f"missing kpis.tools.{key}: {tools!r}")
+              if not isinstance(tools[key], (int, float)):
+                raise SystemExit(f"expected kpis.tools.{key} to be number, got: {type(tools[key])} {tools[key]!r}")
+
+          assert_kpis_shape(strict)
+          assert_kpis_shape(by_request)
+
+          cmp = http_get_json(
+            f"/admin/metrics/compare?from_a={from_ms}&to_a={to_ms}&from_b={from_ms}&to_b={to_ms}&problem_id={problem_id}&attribution=by_request",
+            headers={"X-Admin-Token": admin_token},
+          )
+          delta = cmp.get("delta")
+          if not isinstance(delta, dict):
+            raise SystemExit(f"expected compare.delta to be object, got: {type(delta)} {delta!r}")
+          for key in [
+            "inference_success_rate",
+            "share_completed_rate",
+            "retest_completed_rate",
+            "tools_expanded_rate",
+            "inference_started",
+            "share_completed",
+            "tools_expanded",
+          ]:
+            if key not in delta:
+              raise SystemExit(f"missing compare.delta.{key}: {delta!r}")
+            if not isinstance(delta[key], (int, float)):
+              raise SystemExit(f"expected compare.delta.{key} to be number, got: {type(delta[key])} {delta[key]!r}")
 
           print(
             "E2E metrics attribution: OK",

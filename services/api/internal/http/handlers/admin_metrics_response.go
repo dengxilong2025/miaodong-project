@@ -9,12 +9,13 @@ func adminMetricsResponse(from, to int64, problemID, attribution string, res met
 			"to_ts_ms":   to,
 		},
 		"filter": map[string]any{
-			"problem_id":   problemID,
-			"attribution":  attribution,
+			"problem_id":  problemID,
+			"attribution": attribution,
 		},
 		"events_total":   res.EventsTotal,
 		"distinct_users": res.DistinctUsers,
 		"by_event_name":  res.ByEventName,
 		"feedback":       res.Feedback,
+		"kpis":           res.KPIs,
 	}
 }

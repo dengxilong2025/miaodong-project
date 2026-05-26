@@ -19,6 +19,37 @@ type Feedback struct {
 	HelpfulRate float64 `json:"helpful_rate"`
 }
 
+type InferenceKPI struct {
+	Started     int64   `json:"started"`
+	Succeeded   int64   `json:"succeeded"`
+	Failed      int64   `json:"failed"`
+	SuccessRate float64 `json:"success_rate"`
+}
+
+type ShareKPI struct {
+	Clicked       int64   `json:"clicked"`
+	Completed     int64   `json:"completed"`
+	CompletedRate float64 `json:"completed_rate"`
+}
+
+type RetestKPI struct {
+	Started       int64   `json:"started"`
+	Completed     int64   `json:"completed"`
+	CompletedRate float64 `json:"completed_rate"`
+}
+
+type ToolsKPI struct {
+	Expanded     int64   `json:"expanded"`
+	ExpandedRate float64 `json:"expanded_rate"`
+}
+
+type KPIs struct {
+	Inference InferenceKPI `json:"inference"`
+	Share     ShareKPI     `json:"share"`
+	Retest    RetestKPI    `json:"retest"`
+	Tools     ToolsKPI     `json:"tools"`
+}
+
 // Result is the DB aggregation result for a given window.
 // It intentionally matches the existing /admin/metrics output fields.
 type Result struct {
@@ -26,6 +57,7 @@ type Result struct {
 	DistinctUsers int64         `json:"distinct_users"`
 	ByEventName   []ByEventItem `json:"by_event_name"`
 	Feedback      Feedback      `json:"feedback"`
+	KPIs          KPIs          `json:"kpis"`
 }
 
 // DeltaResult is the compare delta between window A and B.
@@ -34,6 +66,22 @@ type DeltaResult struct {
 	EventsTotal         int64   `json:"events_total"`
 	DistinctUsers       int64   `json:"distinct_users"`
 	FeedbackHelpfulRate float64 `json:"feedback_helpful_rate"`
+
+	// KPI counts
+	InferenceStarted   int64 `json:"inference_started"`
+	InferenceSucceeded int64 `json:"inference_succeeded"`
+	InferenceFailed    int64 `json:"inference_failed"`
+	ShareClicked       int64 `json:"share_clicked"`
+	ShareCompleted     int64 `json:"share_completed"`
+	RetestStarted      int64 `json:"retest_started"`
+	RetestCompleted    int64 `json:"retest_completed"`
+	ToolsExpanded      int64 `json:"tools_expanded"`
+
+	// KPI rates
+	InferenceSuccessRate float64 `json:"inference_success_rate"`
+	ShareCompletedRate   float64 `json:"share_completed_rate"`
+	RetestCompletedRate  float64 `json:"retest_completed_rate"`
+	ToolsExpandedRate    float64 `json:"tools_expanded_rate"`
 }
 
 func Delta(a, b Result) DeltaResult {
@@ -41,6 +89,20 @@ func Delta(a, b Result) DeltaResult {
 		EventsTotal:         b.EventsTotal - a.EventsTotal,
 		DistinctUsers:       b.DistinctUsers - a.DistinctUsers,
 		FeedbackHelpfulRate: b.Feedback.HelpfulRate - a.Feedback.HelpfulRate,
+
+		InferenceStarted:   b.KPIs.Inference.Started - a.KPIs.Inference.Started,
+		InferenceSucceeded: b.KPIs.Inference.Succeeded - a.KPIs.Inference.Succeeded,
+		InferenceFailed:    b.KPIs.Inference.Failed - a.KPIs.Inference.Failed,
+		ShareClicked:       b.KPIs.Share.Clicked - a.KPIs.Share.Clicked,
+		ShareCompleted:     b.KPIs.Share.Completed - a.KPIs.Share.Completed,
+		RetestStarted:      b.KPIs.Retest.Started - a.KPIs.Retest.Started,
+		RetestCompleted:    b.KPIs.Retest.Completed - a.KPIs.Retest.Completed,
+		ToolsExpanded:      b.KPIs.Tools.Expanded - a.KPIs.Tools.Expanded,
+
+		InferenceSuccessRate: b.KPIs.Inference.SuccessRate - a.KPIs.Inference.SuccessRate,
+		ShareCompletedRate:   b.KPIs.Share.CompletedRate - a.KPIs.Share.CompletedRate,
+		RetestCompletedRate:  b.KPIs.Retest.CompletedRate - a.KPIs.Retest.CompletedRate,
+		ToolsExpandedRate:    b.KPIs.Tools.ExpandedRate - a.KPIs.Tools.ExpandedRate,
 	}
 }
 
@@ -120,6 +182,95 @@ func Aggregate(ctx context.Context, db *sql.DB, from, to int64, problemID, attri
 		Total:       fbTotal,
 		Helpful:     fbHelpful,
 		HelpfulRate: helpfulRate,
+	}
+
+	// 4) KPIs（problem 维度）
+	//
+	// 口径：
+	// - inference success rate = inference_succeeded / inference_started
+	// - share completed rate = share_completed / result_page_viewed
+	// - retest completed rate = retest_completed / inference_succeeded
+	// - tools expanded rate = tools_section_expanded / result_page_viewed
+	//
+	// 分母为 0 时 rate 返回 0.0。
+	var (
+		inferenceStarted   int64
+		inferenceSucceeded int64
+		inferenceFailed    int64
+		shareClicked       int64
+		shareCompleted     int64
+		retestStarted      int64
+		retestCompleted    int64
+		toolsExpanded      int64
+		resultPageViewed   int64
+	)
+	if err := db.QueryRowContext(
+		ctx,
+		`select
+		    sum(case when event_name='inference_started' then 1 else 0 end)::bigint as inference_started,
+		    sum(case when event_name='inference_succeeded' then 1 else 0 end)::bigint as inference_succeeded,
+		    sum(case when event_name='inference_failed' then 1 else 0 end)::bigint as inference_failed,
+		    sum(case when event_name='share_clicked' then 1 else 0 end)::bigint as share_clicked,
+		    sum(case when event_name='share_completed' then 1 else 0 end)::bigint as share_completed,
+		    sum(case when event_name='retest_started' then 1 else 0 end)::bigint as retest_started,
+		    sum(case when event_name='retest_completed' then 1 else 0 end)::bigint as retest_completed,
+		    sum(case when event_name='tools_section_expanded' then 1 else 0 end)::bigint as tools_expanded,
+		    sum(case when event_name='result_page_viewed' then 1 else 0 end)::bigint as result_page_viewed
+		   from analytics_events
+		  where ts_ms >= $1 and ts_ms <= $2`+where,
+		args...,
+	).Scan(
+		&inferenceStarted,
+		&inferenceSucceeded,
+		&inferenceFailed,
+		&shareClicked,
+		&shareCompleted,
+		&retestStarted,
+		&retestCompleted,
+		&toolsExpanded,
+		&resultPageViewed,
+	); err != nil {
+		return out, err
+	}
+
+	inferenceSuccessRate := 0.0
+	if inferenceStarted > 0 {
+		inferenceSuccessRate = float64(inferenceSucceeded) / float64(inferenceStarted)
+	}
+	shareCompletedRate := 0.0
+	if resultPageViewed > 0 {
+		shareCompletedRate = float64(shareCompleted) / float64(resultPageViewed)
+	}
+	retestCompletedRate := 0.0
+	if inferenceSucceeded > 0 {
+		retestCompletedRate = float64(retestCompleted) / float64(inferenceSucceeded)
+	}
+	toolsExpandedRate := 0.0
+	if resultPageViewed > 0 {
+		toolsExpandedRate = float64(toolsExpanded) / float64(resultPageViewed)
+	}
+
+	out.KPIs = KPIs{
+		Inference: InferenceKPI{
+			Started:     inferenceStarted,
+			Succeeded:   inferenceSucceeded,
+			Failed:      inferenceFailed,
+			SuccessRate: inferenceSuccessRate,
+		},
+		Share: ShareKPI{
+			Clicked:       shareClicked,
+			Completed:     shareCompleted,
+			CompletedRate: shareCompletedRate,
+		},
+		Retest: RetestKPI{
+			Started:       retestStarted,
+			Completed:     retestCompleted,
+			CompletedRate: retestCompletedRate,
+		},
+		Tools: ToolsKPI{
+			Expanded:     toolsExpanded,
+			ExpandedRate: toolsExpandedRate,
+		},
 	}
 
 	return out, nil
