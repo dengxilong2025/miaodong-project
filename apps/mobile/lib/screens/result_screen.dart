@@ -117,6 +117,7 @@ class _ResultScreenState extends State<ResultScreen> {
   bool _submittingRetest = false;
   String? _currentResultAtIso;
   String? _followupAnswer;
+  final Set<String> _doneSuggestions = <String>{};
 
   @override
   void initState() {
@@ -166,6 +167,7 @@ class _ResultScreenState extends State<ResultScreen> {
       _resp = null;
       _currentResultAtIso = null;
       _followupAnswer = null;
+      _doneSuggestions.clear();
     });
 
     try {
@@ -313,6 +315,18 @@ class _ResultScreenState extends State<ResultScreen> {
         'question_id': (question['id'] ?? '').toString(),
         'answer_value': value,
       },
+    );
+  }
+
+  Future<void> _markSuggestionDone(Map<String, dynamic> suggestion) async {
+    final id = (suggestion['id'] ?? '').toString();
+    if (id.isEmpty || _doneSuggestions.contains(id)) return;
+    setState(() => _doneSuggestions.add(id));
+    await widget.telemetry.track(
+      'suggestion_mark_done',
+      requestId: _requestId(),
+      contentVersion: _contentVersionValue(),
+      payload: {'suggestion_id': id, 'problem_id': widget.problemId},
     );
   }
 
@@ -694,6 +708,9 @@ class _ResultScreenState extends State<ResultScreen> {
           final windowHours =
               window is num ? window.toInt() : int.tryParse('$window');
           final retestTip = (s['retest_tip'] ?? '').toString().trim();
+          final suggestionId = (s['id'] ?? '').toString();
+          final done = suggestionId.isNotEmpty &&
+              _doneSuggestions.contains(suggestionId);
           return Card(
             margin: const EdgeInsets.only(bottom: 10),
             child: Padding(
@@ -725,6 +742,19 @@ class _ResultScreenState extends State<ResultScreen> {
                     Text('复测提示：$retestTip',
                         style: Theme.of(context).textTheme.bodySmall),
                   ],
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          done ? null : () => unawaited(_markSuggestionDone(s)),
+                      icon: Icon(
+                        done ? Icons.check_circle : Icons.check_circle_outline,
+                        size: 18,
+                      ),
+                      label: Text(done ? '已完成' : '我做了'),
+                    ),
+                  ),
                 ],
               ),
             ),

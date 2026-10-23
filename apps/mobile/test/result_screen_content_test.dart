@@ -61,6 +61,17 @@ void main() {
     expect(find.text('风险提示 · 绿灯'), findsOneWidget);
     expect(find.text('精神食欲正常，先调整作息看看。'), findsOneWidget);
 
+    // 建议打卡：直接服务“有效解决次数”北极星指标。
+    await tester.ensureVisible(find.text('我做了').first);
+    await tester.tap(find.text('我做了').first);
+    await tester.pumpAndSettle();
+    expect(find.text('已完成'), findsOneWidget);
+    final doneEvent = client.requests
+        .where((r) => r.url.path == '/v1/analytics/event')
+        .map((r) => jsonDecode(r.body) as Map<String, dynamic>)
+        .firstWhere((e) => e['event_name'] == 'suggestion_mark_done');
+    expect((doneEvent['payload'] as Map)['suggestion_id'], 's_night_01');
+
     // 工具区默认折叠。
     expect(find.text('省力工具（可选）'), findsOneWidget);
     expect(find.text('优先可控可重复的玩具'), findsNothing);
