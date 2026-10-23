@@ -9,9 +9,13 @@
 ## 0. 全局约定
 
 - Base URL：`/v1`
-- Auth：`Authorization: Bearer <token>`（MVP 支持匿名 token）
+- Auth：
+  - 本地开发：`Authorization: Bearer dev-token-<user_id>`（仅限本地/CI）
+  - 公网/H5：签名 token（HMAC/JWT），不可伪造；见 ADR-0004
+- 渠道：可选请求头 `X-Client-Channel: app|h5|wechat_mini`（默认 `app`）
 - Trace：服务端返回 `X-Request-Id`
 - 版本：响应体包含 `schema_version`、`model_version`、并记录 `content_version`
+- 限流：超限返回 429，错误码 `RATE_LIMITED`
 - 错误格式：
 ```json
 { "error": { "code": "RATE_LIMITED", "message": "请稍后再试", "request_id": "..." } }
@@ -55,8 +59,11 @@ Response：
 - `audio/aac`
 - `audio/wav`
 - `audio/3gpp`（部分安卓录音）
+- `audio/webm`（H5 MediaRecorder，常见 opus）
+- `audio/mpeg`（微信小程序录音，mp3）
 
-服务端统一转码为：16kHz / mono / PCM WAV（推理侧只吃一种标准输入）。
+**服务端统一转码为：16kHz / mono / PCM WAV**（推理侧只吃一种标准输入）。
+转码失败返回 `AUDIO_NORMALIZE_FAILED`，不进入推理。
 
 ---
 
@@ -120,7 +127,8 @@ Response（结构要长期稳定）：
   "share_asset": {
     "share_title": "测一测我家猫在想啥",
     "share_text_template": "我家猫这次更像：{label}（{confidence}%）…",
-    "card_style": "result_card_v1"
+    "card_style": "result_card_v1",
+    "channel": "app" // app|h5|wechat_mini
   }
 }
 ```
@@ -142,3 +150,30 @@ Request：
 ```json
 { "request_id": "r_001", "helpful": true, "intent_match": "match", "notes": "…" }
 ```
+
+---
+
+## 6) 复测
+
+`POST /v1/retest`
+
+```json
+{ "problem_id": "night_meow", "baseline_request_id": "r_old", "current_request_id": "r_new" }
+```
+
+---
+
+## 7) Admin 结果页预览（内部）
+
+`GET /admin/preview/result?problem_id=night_meow`
+Header：`X-Admin-Token: <token>`
+
+返回与 `/v1/inference` 成功结构一致，但：
+
+- `preview: true`
+- `model_version: "preview"`
+- `primary_intent` 为示例意图（`code=PREVIEW`）
+- `request_id` 以 `preview_` 开头
+- **不写库、不影响线上发布**
+
+用途：运营在发布前确认追问/建议/风险/工具区/分享物料。

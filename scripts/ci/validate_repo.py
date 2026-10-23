@@ -108,6 +108,16 @@ def main() -> None:
     assert_doc_exists("docs/project/WBS_MILESTONES.md")
     assert_doc_exists("docs/project/RACI.md")
     assert_doc_exists("docs/project/RISKS.md")
+    assert_doc_exists("docs/project/DEV_WORKFLOW.md")
+    assert_doc_exists("docs/ops/MVP_LAUNCH_CHECKLIST.md")
+    assert_doc_exists("docs/adr/0004-multi-channel-and-low-cost-validation.md")
+
+    # 计划完整性：多渠道与低成本验证必须出现在 WBS 中
+    wbs = (ROOT / "docs" / "project" / "WBS_MILESTONES.md").read_text(encoding="utf-8")
+    for token in ["M6", "4A.1", "音频标准化", "签名 token"]:
+        if token not in wbs:
+            fail(f"WBS 缺少多渠道计划关键项：{token}")
+    ok("WBS 包含多渠道/低成本验证计划")
 
     # migrations 存在（后续 CI 会跑 docker compose + goose）
     if not (ROOT / "services" / "api" / "migrations" / "0001_init.sql").exists():

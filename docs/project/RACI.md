@@ -11,10 +11,12 @@
 |---|---|---|
 | 产品/项目负责人 | PM | 定义需求、优先级、验收口径、对外节奏 |
 | 移动端（Flutter） | Mobile | iOS/Android App 开发 |
+| H5 / 小程序 | Web | H5、uni-app/Taro 前端 |
 | 后端（Go API） | Backend | 业务 API、内容/发布系统、埋点接入 |
 | 推理服务（Python） | Inference | 音频标准化、推理契约、推理服务 |
 | 管理后台（Web） | Admin | 运营后台 Web UI（基于 Admin APIs） |
 | 运营/增长 | Ops | 小红书内容与冷启动 SOP、素材、反馈闭环 |
+| 合规/资质 | Compliance | 软著、App 备案、隐私政策、商店资质（可由 PM 兼） |
 | 测试/质量 | QA | 测试策略、发布演练、回归与验收 |
 
 > RACI 说明：R=Responsible 执行；A=Accountable 负责到底/拍板；C=Consulted 咨询；I=Informed 被通知。
@@ -55,6 +57,18 @@
 | 7.1 | 冷启动素材包（标题/正文/封面模板） | Ops | PM | Mobile | QA |
 | 7.2 | 发布演练（灰度→回滚→复盘） | QA | PM | Backend, Ops | Mobile |
 | 7.3 | 上线 SOP（评论/私信/授权口径） | Ops | PM | QA | Mobile, Backend |
+| 1.5 | 音频标准化/转码 | Backend | Backend | Inference, QA | PM, Mobile, Web |
+| 1.6 | 跨端访问（CORS/HTTPS/域名） | Backend | Backend | Ops | PM, Web |
+| 3.6 | 签名 token + 限流 | Backend | Backend | PM, QA | Mobile, Web |
+| 3.7 | 对象存储跨端配置 | Backend | Backend | Web, Mobile | QA |
+| 3.8 | 分享物料渠道化 | Backend | PM | Web, Mobile, Ops | QA |
+| 4A.1 | H5 工程骨架 | Web | Web | Backend | PM, QA |
+| 4A.2 | H5 录音 + 上传 | Web | Web | Backend, Mobile | QA |
+| 4A.3 | H5 结果页 + 复测 | Web | PM | Backend, Ops | QA |
+| 4A.4 | H5 分享/引流 | Web | PM | Ops | QA |
+| 7.4 | 内测分发（TestFlight/APK） | Mobile | Mobile | Ops, QA | PM |
+| 7.5 | 资质与合规（软著/备案/隐私） | Compliance | PM | Ops, Backend | QA |
+| 7.6 | 商店上架 | Ops | PM | Mobile, Compliance | QA |
 
 ---
 

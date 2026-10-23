@@ -22,7 +22,8 @@
 | ts_ms | int | 1710000000000 | 时间戳（毫秒） |
 | user_id | string | u_123 | 用户ID（匿名也可） |
 | session_id | string | s_abc | 会话ID |
-| platform | string | ios/android | 平台 |
+| platform | string | ios/android/h5/wechat_mini | 平台/容器 |
+| channel | string | app/h5/wechat_mini | 渠道（可由 X-Client-Channel 透传） |
 | app_version | string | 0.1.0 | 客户端版本 |
 | content_version | int | 1 | 当前内容版本（发布系统生成） |
 | experiment_bucket | string | exp_xhs_v1:A | AB/灰度桶（可选） |
@@ -174,6 +175,20 @@
 - problem 有用率 = feedback(helpful=true) / feedback_total  
 - problem 复测率 = retest_completed / inference_succeeded(problem_id=X)  
 - problem 分享率 = share_completed / result_page_viewed(problem_id=X)  
+
+### 4.5 渠道维度（MVP 新增）
+
+同一套事件按渠道拆分，用于判断“H5 验证”与“App 内测”的差异：
+
+- 渠道来源：`platform`（ios/android/h5/wechat_mini）+ `channel`
+- 核心对比：推理成功率、结果页有用率、复测率、分享完成率
+- H5 验证期重点关注：
+  - 录音授权率（upload_url_requested / result_page_viewed）
+  - 结果页有用率
+  - 复测率
+  - 分享/回流率
+
+> 渠道字段不改变事件结构；payload 为 jsonb，可平滑扩展。
 
 ---
 
