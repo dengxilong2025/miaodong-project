@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
@@ -226,6 +228,16 @@ class _ProblemDetailScreenState extends State<ProblemDetailScreen> {
             ExpansionTile(
               title: const Text('省力工具（可选）'),
               initiallyExpanded: false,
+              onExpansionChanged: (open) {
+                if (!open) return;
+                unawaited(
+                  widget.telemetry.track(
+                    'tools_section_expanded',
+                    contentVersion: _contentVersion,
+                    payload: {'problem_id': widget.problemId},
+                  ),
+                );
+              },
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               children: _buildToolsGuide(context, _toolsGuide!),
             ),

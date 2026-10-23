@@ -130,6 +130,23 @@
         <div class="card card--panel" style="margin-top:14px;">
           <div class="card__header">
             <div>
+              <div class="card__title-sm">核心 KPI</div>
+              <div class="card__subtle">口径与 docs/tech/ANALYTICS_SPEC.md 对齐</div>
+            </div>
+            <span class="pill pill--soft">inference / share / retest / tools</span>
+          </div>
+          <div id="metricsKpis">
+            <div class="card__row">
+              <div class="skeleton" style="width: 48%"></div>
+              <div class="skeleton" style="width: 62%"></div>
+              <div class="skeleton" style="width: 54%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card--panel" style="margin-top:14px;">
+          <div class="card__header">
+            <div>
               <div class="card__title-sm">by_event_name Top10</div>
               <div class="card__subtle">按事件名聚合（count desc）</div>
             </div>
@@ -258,6 +275,51 @@
     `;
   }
 
+  function renderKpiStats(kpisEl, kpis) {
+    const { escapeHTML, formatNumber, formatPercent01 } = window.AdminLib;
+    if (!kpisEl) return;
+    if (!kpis || typeof kpis !== "object") {
+      kpisEl.innerHTML = `<div class="empty-hint">KPI 暂不可用。</div>`;
+      return;
+    }
+
+    const inf = kpis.inference || {};
+    const share = kpis.share || {};
+    const retest = kpis.retest || {};
+    const tools = kpis.tools || {};
+
+    kpisEl.innerHTML = `
+      <div class="stats stats--2">
+        <div class="stat">
+          <div class="stat__k">推理成功率</div>
+          <div class="stat__v">${escapeHTML(formatPercent01(inf.success_rate, 1))}</div>
+          <div class="card__subtle">started ${escapeHTML(formatNumber(inf.started))} · succeeded ${escapeHTML(
+            formatNumber(inf.succeeded)
+          )} · failed ${escapeHTML(formatNumber(inf.failed))}</div>
+        </div>
+        <div class="stat">
+          <div class="stat__k">分享完成率</div>
+          <div class="stat__v">${escapeHTML(formatPercent01(share.completed_rate, 1))}</div>
+          <div class="card__subtle">clicked ${escapeHTML(formatNumber(share.clicked))} · completed ${escapeHTML(
+            formatNumber(share.completed)
+          )}</div>
+        </div>
+        <div class="stat">
+          <div class="stat__k">复测率</div>
+          <div class="stat__v">${escapeHTML(formatPercent01(retest.completed_rate, 1))}</div>
+          <div class="card__subtle">started ${escapeHTML(formatNumber(retest.started))} · completed ${escapeHTML(
+            formatNumber(retest.completed)
+          )}</div>
+        </div>
+        <div class="stat">
+          <div class="stat__k">工具区展开率</div>
+          <div class="stat__v">${escapeHTML(formatPercent01(tools.expanded_rate, 1))}</div>
+          <div class="card__subtle">expanded ${escapeHTML(formatNumber(tools.expanded))}</div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderSingle(el, ctx) {
     const { $, apiFetch, showToast, escapeHTML, formatDateTime, formatNumber, formatPercent01 } =
       window.AdminLib;
@@ -277,6 +339,7 @@
     const windowHintEl = $("#metricsWindowHint", el);
     const summaryEl = $("#metricsSummary", el);
     const feedbackEl = $("#metricsFeedback", el);
+    const kpisEl = $("#metricsKpis", el);
     const byEventEl = $("#metricsByEvent", el);
 
     const state = {
@@ -328,6 +391,15 @@
             <div class="skeleton" style="width: 56%"></div>
             <div class="skeleton" style="width: 62%"></div>
             <div class="skeleton" style="width: 44%"></div>
+          </div>
+        `;
+      }
+      if (kpisEl) {
+        kpisEl.innerHTML = `
+          <div class="card__row">
+            <div class="skeleton" style="width: 48%"></div>
+            <div class="skeleton" style="width: 62%"></div>
+            <div class="skeleton" style="width: 54%"></div>
           </div>
         `;
       }
@@ -398,6 +470,7 @@
       }
 
       renderByEventTable(byEventEl, data ? data.by_event_name : []);
+      renderKpiStats(kpisEl, data ? data.kpis : null);
     }
 
     async function doQuery() {
@@ -441,6 +514,7 @@
           )}</pre>`;
         }
         if (feedbackEl) feedbackEl.innerHTML = `<div class="empty-hint">反馈统计暂不可用。</div>`;
+        if (kpisEl) kpisEl.innerHTML = `<div class="empty-hint">KPI 暂不可用。</div>`;
         if (byEventEl) byEventEl.innerHTML = `<div class="empty-hint">事件表暂不可用。</div>`;
       } finally {
         if (queryBtn) queryBtn.disabled = false;
@@ -531,6 +605,29 @@
       const bHR = b && b.feedback ? b.feedback.helpful_rate : null;
       const dHR = d ? d.feedback_helpful_rate : null;
 
+      const aK = (a && a.kpis) || {};
+      const bK = (b && b.kpis) || {};
+      const aInf = aK.inference || {};
+      const bInf = bK.inference || {};
+      const aShare = aK.share || {};
+      const bShare = bK.share || {};
+      const aRetest = aK.retest || {};
+      const bRetest = bK.retest || {};
+      const aTools = aK.tools || {};
+      const bTools = bK.tools || {};
+
+      const kpiRow = (label, aVal, bVal, dVal, kind) => `
+            <tr>
+              <td class="cell-mono">${escapeHTML(label)}</td>
+              <td class="cell-mono">${escapeHTML(
+                kind === "pp" ? formatPercent01(aVal, 1) : formatNumber(aVal)
+              )}</td>
+              <td class="cell-mono">${escapeHTML(
+                kind === "pp" ? formatPercent01(bVal, 1) : formatNumber(bVal)
+              )}</td>
+              <td class="cell-mono">${deltaCellHTML(dVal, { kind })}</td>
+            </tr>`;
+
       tableWrapEl.innerHTML = `
         <table class="table">
           <thead>
@@ -560,6 +657,16 @@
               <td class="cell-mono">${escapeHTML(formatPercent01(bHR, 1))}</td>
               <td class="cell-mono">${deltaCellHTML(dHR, { kind: "pp" })}</td>
             </tr>
+            ${kpiRow("inference.success_rate", aInf.success_rate, bInf.success_rate, d ? d.inference_success_rate : null, "pp")}
+            ${kpiRow("inference.started", aInf.started, bInf.started, d ? d.inference_started : null, "int")}
+            ${kpiRow("inference.succeeded", aInf.succeeded, bInf.succeeded, d ? d.inference_succeeded : null, "int")}
+            ${kpiRow("inference.failed", aInf.failed, bInf.failed, d ? d.inference_failed : null, "int")}
+            ${kpiRow("share.completed_rate", aShare.completed_rate, bShare.completed_rate, d ? d.share_completed_rate : null, "pp")}
+            ${kpiRow("share.completed", aShare.completed, bShare.completed, d ? d.share_completed : null, "int")}
+            ${kpiRow("retest.completed_rate", aRetest.completed_rate, bRetest.completed_rate, d ? d.retest_completed_rate : null, "pp")}
+            ${kpiRow("retest.completed", aRetest.completed, bRetest.completed, d ? d.retest_completed : null, "int")}
+            ${kpiRow("tools.expanded_rate", aTools.expanded_rate, bTools.expanded_rate, d ? d.tools_expanded_rate : null, "pp")}
+            ${kpiRow("tools.expanded", aTools.expanded, bTools.expanded, d ? d.tools_expanded : null, "int")}
           </tbody>
         </table>
       `;

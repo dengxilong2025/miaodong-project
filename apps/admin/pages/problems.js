@@ -348,23 +348,7 @@
           </div>
         `;
 
-        // bind tab switch
-        editorEl.addEventListener(
-          "click",
-          async (e) => {
-            const btn =
-              e.target && e.target.closest ? e.target.closest("[data-tab]") : null;
-            if (!btn) return;
-            const nextTab = btn.getAttribute("data-tab") || "";
-            if (!nextTab || nextTab === state.activeTab) return;
-            const ok = await confirmDiscardIfDirty(`切换到 ${nextTab} 标签`);
-            if (!ok) return;
-            resetFormFromSelected();
-            state.activeTab = nextTab;
-            renderEditor();
-          },
-          { once: true }
-        );
+        // tab 切换监听在 renderEditor 外部统一绑定，避免每次渲染叠加监听。
 
         if (tab === "problem") {
           const titleInput = $("#problemTitleInput", editorEl);
@@ -1095,6 +1079,22 @@
             hydrateToolsForm();
           }
         }
+      }
+
+      // Tab 切换只绑定一次：持久监听，避免重复绑定或被“点击当前 tab”消耗。
+      if (editorEl) {
+        editorEl.addEventListener("click", async (e) => {
+          const btn =
+            e.target && e.target.closest ? e.target.closest("[data-tab]") : null;
+          if (!btn) return;
+          const nextTab = btn.getAttribute("data-tab") || "";
+          if (!nextTab || nextTab === state.activeTab) return;
+          const ok = await confirmDiscardIfDirty(`切换到 ${nextTab} 标签`);
+          if (!ok) return;
+          resetFormFromSelected();
+          state.activeTab = nextTab;
+          renderEditor();
+        });
       }
 
       function renderList() {

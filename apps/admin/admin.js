@@ -1514,6 +1514,8 @@
       return;
     }
     if (route === "problems") {
+      // Prefer module-based page (pages/problems.js): Problem + Questions + Suggestions + Tools 编辑闭环。
+      if (renderPageViaModule("problems", pageRoot, seq, routeQuery)) return;
       renderProblems(pageRoot, seq);
       return;
     }

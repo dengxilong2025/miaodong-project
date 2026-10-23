@@ -14,15 +14,48 @@ type Seed struct {
 
 	Meta        map[string]any `json:"meta"`
 	Problems    []Problem      `json:"problems"`
-	Questions   []any          `json:"questions"`
-	Suggestions []any          `json:"suggestions"`
+	Questions   []Question     `json:"questions"`
+	Suggestions []Suggestion   `json:"suggestions"`
+	ToolsGuides []ToolsGuide   `json:"tools_guides"`
 }
 
 type Problem struct {
-	ID      string   `json:"id"`
-	Title   string   `json:"title"`
-	Summary string   `json:"summary"`
-	Tags    []string `json:"tags"`
+	ID             string            `json:"id"`
+	Title          string            `json:"title"`
+	Summary        string            `json:"summary"`
+	Tags           []string          `json:"tags"`
+	CauseFramework []string          `json:"cause_framework"`
+	RetestPlan72h  []string          `json:"retest_plan_72h"`
+	RiskLevelCopy  map[string]string `json:"risk_level_copy"`
+}
+
+type Question struct {
+	ID        string `json:"id"`
+	ProblemID string `json:"problem_id"`
+	Priority  int    `json:"priority"`
+	Text      string `json:"text"`
+	Type      string `json:"type"`
+	Options   any    `json:"options"`
+	Condition any    `json:"condition"`
+}
+
+type Suggestion struct {
+	ID                  string `json:"id"`
+	ProblemID           string `json:"problem_id"`
+	Priority            int    `json:"priority"`
+	Title               string `json:"title"`
+	Steps               any    `json:"steps"`
+	ExpectedWindowHours int    `json:"expected_window_hours"`
+	RetestTip           string `json:"retest_tip"`
+	Condition           any    `json:"condition"`
+}
+
+type ToolsGuide struct {
+	ID                 string `json:"id"`
+	ProblemID          string `json:"problem_id"`
+	CollapsedByDefault bool   `json:"collapsed_by_default"`
+	GuideBullets       any    `json:"guide_bullets"`
+	EfficiencyItems    any    `json:"efficiency_items"`
 }
 
 func LoadSeed(seedPath string) (*Seed, error) {

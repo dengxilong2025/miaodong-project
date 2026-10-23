@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/authctx"
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/content"
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/db"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/inference"
 )
 
@@ -24,6 +27,26 @@ func inferenceTimeout() time.Duration {
 		return 3 * time.Second
 	}
 	return time.Duration(ms) * time.Millisecond
+}
+
+// resolveInferenceContentVersion 读取 releases 的发布/灰度结果。
+// DB 不可用时回退到 1，保证推理链路本身不被内容库拖垮。
+func resolveInferenceContentVersion(r *http.Request) int {
+	conn, err := db.Open()
+	if err != nil {
+		return 1
+	}
+	defer conn.Close()
+
+	// 内容版本解析不能拖慢推理：DB 抖动时最多等 300ms，然后走降级版本。
+	ctx, cancel := context.WithTimeout(r.Context(), 300*time.Millisecond)
+	defer cancel()
+
+	cv, err := content.ResolveContentVersionDB(ctx, conn, authctx.UserID(r.Context()), nil)
+	if err != nil || cv <= 0 {
+		return 1
+	}
+	return cv
 }
 
 func degradedReason(err error) string {
@@ -75,7 +98,7 @@ func Inference(w http.ResponseWriter, r *http.Request) {
 	}
 
 	requestID := "req_" + randHex(12)
-	contentVersion := 1 // MVP：后续从 releases/runtime_config 决策
+	contentVersion := resolveInferenceContentVersion(r)
 
 	base := os.Getenv("MIAODONG_INFERENCE_URL")
 	if base == "" {

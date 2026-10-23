@@ -146,6 +146,7 @@ jobs:
           done
           
           curl -fsS "${API_URL}/v1/problems?limit=3" > /tmp/problems.json
+          curl -fsS "${API_URL}/v1/problems/night_meow" > /tmp/problem_night.json
           python3 - <<'PY'
           import json
           
@@ -155,7 +156,16 @@ jobs:
           ids=[it.get("id") for it in items]
           assert any(i in ids for i in ["night_meow","cat_diarrhea","cat_vomit"]), ids
           assert d.get("content_version")==1, d.get("content_version")
-          print("E2E content api: OK", ids)
+
+          b=json.load(open("/tmp/problem_night.json"))
+          qs=b.get("questions") or []
+          ss=b.get("suggestions") or []
+          tg=b.get("tools_guides") or {}
+          assert len(qs)>=5, qs
+          assert len(ss)>=3, ss
+          assert tg.get("problem_id")=="night_meow", tg
+          assert b.get("content_version")==1, b.get("content_version")
+          print("E2E content api: OK", ids, "questions=", len(qs), "suggestions=", len(ss), "tools=yes")
           PY
 
       - name: "E2E: admin content crud"

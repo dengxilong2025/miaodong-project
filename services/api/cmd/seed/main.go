@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -50,37 +51,97 @@ func main() {
 }
 
 func buildSQL(s *content.Seed) (string, error) {
-	// MVP：先导入 problems（questions/suggestions/tools_guides 后续补齐）
+	// 全量导入内容权威层：problems / questions / suggestions / tools_guides。
 	// 采用 SQL 文本生成方式，避免引入数据库驱动依赖，方便 CI/本机用 psql 执行：
 	//   go run ./cmd/seed --out /tmp/seed.sql
 	//   psql "$DSN" -f /tmp/seed.sql
 	out := "begin;\n"
+
 	for _, p := range s.Problems {
-		tagsJSON := toJSON(p.Tags)
 		out += fmt.Sprintf(
-			"insert into problems (id, title, summary, tags, status) values (%s, %s, %s, %s::jsonb, 'published')\n"+
-				"on conflict (id) do update set title=excluded.title, summary=excluded.summary, tags=excluded.tags, status=excluded.status, updated_at=now();\n",
+			`insert into problems (id, title, summary, tags, cause_framework, retest_plan_72h, risk_level_copy, status)
+values (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, 'published')
+on conflict (id) do update set title=excluded.title, summary=excluded.summary, tags=excluded.tags,
+  cause_framework=excluded.cause_framework, retest_plan_72h=excluded.retest_plan_72h,
+  risk_level_copy=excluded.risk_level_copy, status=excluded.status, updated_at=now();
+`,
 			sqlQuote(p.ID),
 			sqlQuote(p.Title),
 			sqlQuote(p.Summary),
-			sqlQuote(tagsJSON),
+			sqlQuote(jsonValue(p.Tags, "[]")),
+			sqlQuote(jsonValue(p.CauseFramework, "[]")),
+			sqlQuote(jsonValue(p.RetestPlan72h, "[]")),
+			sqlQuote(jsonValue(p.RiskLevelCopy, "{}")),
 		)
 	}
+
+	for _, q := range s.Questions {
+		out += fmt.Sprintf(
+			`insert into questions (id, problem_id, priority, text, type, options, condition, status)
+values (%s, %s, %d, %s, %s, %s::jsonb, %s::jsonb, 'published')
+on conflict (id) do update set problem_id=excluded.problem_id, priority=excluded.priority,
+  text=excluded.text, type=excluded.type, options=excluded.options, condition=excluded.condition,
+  status=excluded.status, updated_at=now();
+`,
+			sqlQuote(q.ID),
+			sqlQuote(q.ProblemID),
+			q.Priority,
+			sqlQuote(q.Text),
+			sqlQuote(q.Type),
+			sqlQuote(jsonValue(q.Options, "[]")),
+			sqlQuote(jsonValue(q.Condition, "{}")),
+		)
+	}
+
+	for _, sg := range s.Suggestions {
+		out += fmt.Sprintf(
+			`insert into suggestions (id, problem_id, priority, title, steps, expected_window_hours, retest_tip, condition, status)
+values (%s, %s, %d, %s, %s::jsonb, %d, %s, %s::jsonb, 'published')
+on conflict (id) do update set problem_id=excluded.problem_id, priority=excluded.priority,
+  title=excluded.title, steps=excluded.steps, expected_window_hours=excluded.expected_window_hours,
+  retest_tip=excluded.retest_tip, condition=excluded.condition, status=excluded.status, updated_at=now();
+`,
+			sqlQuote(sg.ID),
+			sqlQuote(sg.ProblemID),
+			sg.Priority,
+			sqlQuote(sg.Title),
+			sqlQuote(jsonValue(sg.Steps, "[]")),
+			sg.ExpectedWindowHours,
+			sqlQuote(sg.RetestTip),
+			sqlQuote(jsonValue(sg.Condition, "{}")),
+		)
+	}
+
+	for _, tg := range s.ToolsGuides {
+		out += fmt.Sprintf(
+			`insert into tools_guides (id, problem_id, collapsed_by_default, guide_bullets, efficiency_items, status)
+values (%s, %s, %t, %s::jsonb, %s::jsonb, 'published')
+on conflict (problem_id) do update set collapsed_by_default=excluded.collapsed_by_default,
+  guide_bullets=excluded.guide_bullets, efficiency_items=excluded.efficiency_items,
+  status=excluded.status, updated_at=now();
+`,
+			sqlQuote(tg.ID),
+			sqlQuote(tg.ProblemID),
+			tg.CollapsedByDefault,
+			sqlQuote(jsonValue(tg.GuideBullets, "[]")),
+			sqlQuote(jsonValue(tg.EfficiencyItems, "[]")),
+		)
+	}
+
 	out += "commit;\n"
 	return out, nil
 }
 
-func toJSON(tags []string) string {
-	// 手写最小 JSON（只用于 tags:string[]）
-	out := "["
-	for i, s := range tags {
-		if i > 0 {
-			out += ","
-		}
-		out += fmt.Sprintf("%q", s)
+// jsonValue 把任意结构序列化为 jsonb 文本；nil 使用 fallback（保证列非空）。
+func jsonValue(v any, fallback string) string {
+	if v == nil {
+		return fallback
 	}
-	out += "]"
-	return out
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fallback
+	}
+	return string(b)
 }
 
 func sqlQuote(s string) string {
