@@ -855,13 +855,13 @@ jobs:
           )
           PY
 
-      - name: "E2E: audio minio presign"
+      - name: "E2E: audio presign (s3mock)"
         env:
           MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
           GOFLAGS: -mod=mod
-          # Force MinIO presign mode (no fallback)
+          # Force S3/MinIO presign mode (no fallback)
           MIAODONG_AUDIO_STORAGE: minio-presign
-          # MinIO config (docker compose service exposes localhost:9000)
+          # S3Mock (docker compose maps container 9090 -> host 9000)
           MIAODONG_MINIO_ENDPOINT: localhost:9000
           MIAODONG_MINIO_ACCESS_KEY: minio
           MIAODONG_MINIO_SECRET_KEY: minio123456
@@ -871,16 +871,16 @@ jobs:
           set -euo pipefail
           API_URL="http://127.0.0.1:8080"
 
-          # Wait for MinIO
+          # Wait for S3Mock (readiness endpoint)
           for i in {1..60}; do
-            if curl -fsS "http://127.0.0.1:9000/minio/health/ready" >/dev/null; then
-              echo "minio ready"
+            if curl -fsS "http://127.0.0.1:9000/favicon.ico" >/dev/null; then
+              echo "s3mock ready"
               break
             fi
-            echo "waiting minio... ($i)"
+            echo "waiting s3mock... ($i)"
             sleep 1
             if [ "$i" = "60" ]; then
-              echo "minio not ready in time" >&2
+              echo "s3mock not ready in time" >&2
               exit 1
             fi
           done
@@ -933,7 +933,7 @@ jobs:
           sha256sum /tmp/out.bin | cut -d' ' -f1 > /tmp/out.sha
 
           diff -u /tmp/sample.sha /tmp/out.sha
-          echo "E2E audio minio presign: OK"
+          echo "E2E audio presign (s3mock): OK"
 
       - name: Tear down
         if: always()
