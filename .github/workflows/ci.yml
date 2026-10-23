@@ -148,6 +148,7 @@ jobs:
         run: |
           set -euo pipefail
           API_URL="http://127.0.0.1:8080"
+          ADMIN_TOKEN="dev-admin"
           cd services/api
           
           # Start API in background
@@ -173,6 +174,7 @@ jobs:
           curl -fsS "${API_URL}/v1/problems?limit=3" > /tmp/problems.json
           curl -fsS "${API_URL}/v1/problems/night_meow" > /tmp/problem_night.json
           curl -fsS "${API_URL}/v1/templates/result?problem_id=night_meow" > /tmp/result_template.json
+          curl -fsS -H "X-Admin-Token: ${ADMIN_TOKEN}" "${API_URL}/admin/preview/result?problem_id=night_meow" > /tmp/preview.json
           python3 - <<'PY'
           import json
 
@@ -196,7 +198,18 @@ jobs:
           share=tpl.get("share_asset") or {}
           assert share.get("card_style")=="result_card_v1", share
           assert "{label}" in (share.get("share_text_template") or ""), share
-          print("E2E content api: OK", ids, "questions=", len(qs), "suggestions=", len(ss), "tools=yes", "share=yes")
+
+          p=json.load(open("/tmp/preview.json"))
+          assert p.get("preview") is True, p
+          assert (p.get("primary_intent") or {}).get("code")=="PREVIEW", p
+          assert (p.get("followup_question") or {}).get("id"), p
+          ps=p.get("suggestions") or []
+          assert 1 <= len(ps) <= 3, ps
+          assert (p.get("risk_level") or {}).get("level")=="green", p
+          assert (p.get("optional_tools_section") or {}).get("collapsed_by_default") is True, p
+          pshare=p.get("share_asset") or {}
+          assert "{label}" in (pshare.get("share_text_template") or ""), pshare
+          print("E2E content api: OK", ids, "questions=", len(qs), "suggestions=", len(ss), "tools=yes", "share=yes", "preview=yes")
           PY
 
       - name: "E2E: inference content composition"

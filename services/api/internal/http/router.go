@@ -34,6 +34,7 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/admin/metrics", handlers.AdminMetrics)
 	mux.HandleFunc("/admin/metrics/compare", handlers.AdminMetricsCompare)
 	mux.HandleFunc("/admin/audit", handlers.AdminAudit)
+	mux.HandleFunc("/admin/preview/result", handlers.AdminPreviewResult)
 
 	// Admin UI（静态单页），避免与 /admin/* API 冲突：使用 /admin/ui/
 	if h, err := adminui.Handler(); err != nil {

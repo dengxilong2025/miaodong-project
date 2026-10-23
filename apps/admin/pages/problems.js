@@ -88,6 +88,138 @@
     return hay.includes(q);
   }
 
+  function previewHTML(data) {
+    const d = data || {};
+    const intent = d.primary_intent || {};
+    const label = intent.label || intent.name || "-";
+    const confidence = Number(intent.confidence);
+    const confText = Number.isFinite(confidence) ? `${Math.round(confidence * 100)}%` : "-";
+    const explanations = Array.isArray(d.explanations) ? d.explanations : [];
+    const followup = d.followup_question || null;
+    const suggestions = Array.isArray(d.suggestions) ? d.suggestions : [];
+    const risk = d.risk_level || null;
+    const tools = d.optional_tools_section || null;
+    const share = d.share_asset || null;
+
+    const section = (title, body) =>
+      `<div class="card" style="padding:12px;margin-top:10px;">
+        <div class="card__title-sm">${escapeHTML(title)}</div>${body}
+      </div>`;
+
+    const intentHtml = `
+      <div class="card" style="padding:14px;">
+        <div class="row" style="justify-content:space-between;">
+          <span class="pill pill--soft">预览 · 不写库</span>
+          <span class="pill pill--soft">content_version=${escapeHTML(String(d.content_version ?? "-"))}</span>
+        </div>
+        <div style="font-size:20px;font-weight:900;margin-top:10px;">更像：${escapeHTML(String(label))}</div>
+        <div class="card__subtle">置信度：${escapeHTML(confText)} · request_id=${escapeHTML(
+          String(d.request_id ?? "-")
+        )}</div>
+      </div>`;
+
+    const expHtml = section(
+      "解释（证据）",
+      explanations.length
+        ? `<ul style="margin:8px 0 0 18px;">${explanations
+            .map(
+              (e) =>
+                `<li><b>${escapeHTML(String(e.factor || "解释"))}</b>：${escapeHTML(
+                  String(e.text || e.explanation || "")
+                )}</li>`
+            )
+            .join("")}</ul>`
+        : `<div class="empty-hint">暂无解释</div>`
+    );
+
+    const followHtml = followup
+      ? section(
+          "场景追问",
+          `<div style="margin-bottom:8px;">${escapeHTML(String(followup.text || ""))}</div>
+           <div class="row">${(Array.isArray(followup.options) ? followup.options : [])
+             .map(
+               (o) =>
+                 `<span class="pill pill--soft">${escapeHTML(String(o.label || o.value || ""))}</span>`
+             )
+             .join("")}</div>`
+        )
+      : "";
+
+    const sugHtml = suggestions.length
+      ? section(
+          "建议",
+          suggestions
+            .map(
+              (s) => `
+              <div class="card" style="padding:10px;margin-top:8px;">
+                <div style="font-weight:800;">${escapeHTML(String(s.title || "建议"))}</div>
+                <ul style="margin:6px 0 0 18px;">${(Array.isArray(s.steps) ? s.steps : [])
+                  .map((t) => `<li>${escapeHTML(String(t))}</li>`)
+                  .join("")}</ul>
+                <div class="card__subtle">预计 ${escapeHTML(
+                  String(s.expected_window_hours ?? 0)
+                )} 小时内可观察${
+                s.retest_tip ? ` · 复测提示：${escapeHTML(String(s.retest_tip))}` : ""
+              }</div>
+              </div>`
+            )
+            .join("")
+        )
+      : "";
+
+    const levelLabels = { green: "绿灯", yellow: "黄灯", red: "红灯" };
+    const riskHtml = risk
+      ? section(
+          "风险分级",
+          `<div style="font-weight:800;">${escapeHTML(
+            levelLabels[String(risk.level)] || String(risk.level || "green")
+          )}</div>
+           <div class="card__subtle" style="margin-top:4px;">${escapeHTML(String(risk.message || ""))}</div>`
+        )
+      : "";
+
+    const blocks = tools && Array.isArray(tools.content_blocks) ? tools.content_blocks : [];
+    const toolsHtml =
+      blocks.length > 0
+        ? section(
+            "工具区（默认折叠）",
+            blocks
+              .map((b) => {
+                if (String(b.type) === "efficiency_list") {
+                  return `<div style="margin-top:8px;"><b>${escapeHTML(
+                    String(b.title || "")
+                  )}</b>${(Array.isArray(b.items) ? b.items : [])
+                    .map(
+                      (it) =>
+                        `<div class="card__subtle">• ${escapeHTML(
+                          String(it.name || it.sku_key || "")
+                        )}：${escapeHTML(String(it.reason || ""))}</div>`
+                    )
+                    .join("")}</div>`;
+                }
+                return `<div style="margin-top:8px;"><b>${escapeHTML(
+                  String(b.title || "")
+                )}</b>${(Array.isArray(b.bullets) ? b.bullets : [])
+                  .map((t) => `<div class="card__subtle">• ${escapeHTML(String(t))}</div>`)
+                  .join("")}</div>`;
+              })
+              .join("")
+          )
+        : "";
+
+    const shareHtml = share
+      ? section(
+          "分享物料",
+          `<pre class="code-block" style="white-space:pre-wrap;">${escapeHTML(
+            String(share.share_text_template || "")
+          )}</pre>`
+        )
+      : "";
+
+    return `${intentHtml}${expHtml}${followHtml}${sugHtml}${riskHtml}${toolsHtml}${shareHtml}
+      <div class="card__subtle" style="margin-top:10px;">这是内容预览，不代表真实推理结果；发布前请确认风险口径与免责声明。</div>`;
+  }
+
   window.AdminPages.problems = {
     /**
      * @param {HTMLElement} pageEl
@@ -214,7 +346,10 @@
                   <div style="font-weight:900;">基础信息</div>
                   <div class="card__subtle">编辑后点“保存”才会生效</div>
                 </div>
-                <button class="btn btn--primary" type="button" id="problemSaveBtn">保存</button>
+                <div class="row">
+                  <button class="btn btn--ghost" type="button" id="problemPreviewBtn">预览结果</button>
+                  <button class="btn btn--primary" type="button" id="problemSaveBtn">保存</button>
+                </div>
               </div>
 
               <div class="kv" style="margin-top:12px;">
@@ -365,6 +500,25 @@
           const priorityInput = $("#problemPriorityInput", editorEl);
           const statusSelect = $("#problemStatusSelect", editorEl);
           const saveBtn = $("#problemSaveBtn", editorEl);
+          const previewBtn = $("#problemPreviewBtn", editorEl);
+
+          async function openPreview() {
+            const id = state.selectedId;
+            if (!id) return;
+            if (previewBtn) previewBtn.disabled = true;
+            try {
+              const data = await apiFetch(
+                `/admin/preview/result?problem_id=${encodeURIComponent(id)}`
+              );
+              openModal({ title: "结果页预览", bodyHTML: previewHTML(data) });
+            } catch (err) {
+              showToast(`预览失败：${String(err && err.message ? err.message : err)}`, "danger");
+            } finally {
+              if (previewBtn) previewBtn.disabled = false;
+            }
+          }
+
+          if (previewBtn) previewBtn.addEventListener("click", () => void openPreview());
 
           function markDirty() {
             state.dirty = true;
