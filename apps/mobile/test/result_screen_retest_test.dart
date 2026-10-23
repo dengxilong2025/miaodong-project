@@ -6,12 +6,14 @@ import 'package:http/http.dart' as http;
 import 'package:miaodong_mobile/api/api_client.dart';
 import 'package:miaodong_mobile/screens/result_screen.dart';
 import 'package:miaodong_mobile/storage/local_store.dart';
+import 'package:miaodong_mobile/telemetry/telemetry_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('without baseline user can save current result as baseline', (tester) async {
+  testWidgets('without baseline user can save current result as baseline',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     final client = _QueueClient([
       _QueuedResponse.json({
@@ -25,11 +27,13 @@ void main() {
       store: LocalStore(),
       client: client,
     );
+    final telemetry = TelemetryClient(api: api, store: api.store);
 
     await tester.pumpWidget(
       MaterialApp(
         home: ResultScreen(
           api: api,
+          telemetry: telemetry,
           audioUrl: 'https://example.com/audio.m4a',
           problemId: 'night_meow',
         ),
@@ -54,7 +58,9 @@ void main() {
     );
   });
 
-  testWidgets('with baseline user sees compare card and first submit unlocks achievement', (
+  testWidgets(
+      'with baseline user sees compare card and first submit unlocks achievement',
+      (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
@@ -79,11 +85,13 @@ void main() {
       store: LocalStore(),
       client: client,
     );
+    final telemetry = TelemetryClient(api: api, store: api.store);
 
     await tester.pumpWidget(
       MaterialApp(
         home: ResultScreen(
           api: api,
+          telemetry: telemetry,
           audioUrl: 'https://example.com/audio.m4a',
           problemId: 'night_meow',
         ),
@@ -129,10 +137,18 @@ class _QueueClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    if (_responses.isEmpty) {
-      throw StateError('No queued response for ${request.method} ${request.url}');
-    }
     final typed = request as http.Request;
+    if (typed.url.path == '/v1/analytics/event') {
+      return http.StreamedResponse(
+        Stream.value(utf8.encode(jsonEncode({'ok': true}))),
+        200,
+        headers: const {'content-type': 'application/json'},
+      );
+    }
+    if (_responses.isEmpty) {
+      throw StateError(
+          'No queued response for ${request.method} ${request.url}');
+    }
     requests.add(typed);
     final response = _responses.removeAt(0);
     return http.StreamedResponse(

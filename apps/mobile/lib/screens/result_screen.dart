@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -12,7 +13,8 @@ import 'problem_detail_screen.dart';
 
 enum ResultPageState { loading, success, degraded, error }
 
-const String defaultShareTemplate = '我家猫这次更像：{label}（{confidence}%）。来喵懂试试 #喵懂 #喵测';
+const String defaultShareTemplate =
+    '我家猫这次更像：{label}（{confidence}%）。来喵懂试试 #喵懂 #喵测';
 
 int? formatConfidencePercent(Object? confidenceRaw) {
   if (confidenceRaw == null) return null;
@@ -32,7 +34,8 @@ String buildShareTextFromTemplate({
   required String? label,
   required int? confidencePercent,
 }) {
-  final resolvedLabel = (label == null || label.trim().isEmpty) ? '未知' : label.trim();
+  final resolvedLabel =
+      (label == null || label.trim().isEmpty) ? '未知' : label.trim();
   final resolvedConfidence = confidencePercent?.toString() ?? '-';
 
   var text = template
@@ -113,6 +116,7 @@ class _ResultScreenState extends State<ResultScreen> {
   bool _savingBaseline = false;
   bool _submittingRetest = false;
   String? _currentResultAtIso;
+  String? _followupAnswer;
 
   @override
   void initState() {
@@ -161,6 +165,7 @@ class _ResultScreenState extends State<ResultScreen> {
       _error = null;
       _resp = null;
       _currentResultAtIso = null;
+      _followupAnswer = null;
     });
 
     try {
@@ -180,16 +185,17 @@ class _ResultScreenState extends State<ResultScreen> {
         context: ctx,
         problemId: widget.problemId,
       );
-      final degraded = (res['degraded'] == true) || (res['degraded']?.toString() == 'true');
-      final currentAt =
-          res['created_at']?.toString().trim().isNotEmpty == true
-              ? res['created_at'].toString()
-              : DateTime.now().toUtc().toIso8601String();
+      final degraded =
+          (res['degraded'] == true) || (res['degraded']?.toString() == 'true');
+      final currentAt = res['created_at']?.toString().trim().isNotEmpty == true
+          ? res['created_at'].toString()
+          : DateTime.now().toUtc().toIso8601String();
 
       final requestId = res['request_id']?.toString();
       final primary = _asMap(res['primary_intent']);
       final primaryIntentCode = _primaryIntentCodeFrom(primary);
-      final modelVersion = (res['model_version'] ?? res['model'] ?? res['model_id'])?.toString();
+      final modelVersion =
+          (res['model_version'] ?? res['model'] ?? res['model_id'])?.toString();
       final confidence = primary?['confidence'];
 
       setState(() {
@@ -199,7 +205,8 @@ class _ResultScreenState extends State<ResultScreen> {
       });
 
       if (degraded) {
-        final degradedReason = (res['degraded_reason'] ?? res['reason'] ?? '').toString();
+        final degradedReason =
+            (res['degraded_reason'] ?? res['reason'] ?? '').toString();
         await widget.telemetry.track(
           'inference_failed',
           requestId: requestId,
@@ -228,6 +235,15 @@ class _ResultScreenState extends State<ResultScreen> {
           'primary_intent_code': primaryIntentCode,
         },
       );
+
+      final followup = _asMap(res['followup_question']);
+      if (followup != null) {
+        await widget.telemetry.track(
+          'followup_question_shown',
+          requestId: requestId,
+          payload: {'question_id': followup['id']},
+        );
+      }
     } catch (e) {
       await widget.telemetry.track(
         'inference_failed',
@@ -276,6 +292,41 @@ class _ResultScreenState extends State<ResultScreen> {
     return null;
   }
 
+  List<Map<String, dynamic>> _asListOfMap(dynamic v) {
+    if (v is! List) return const [];
+    return v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  int? _contentVersionValue() {
+    final v = _resp?['content_version'];
+    if (v is num) return v.toInt();
+    return int.tryParse('$v');
+  }
+
+  Future<void> _answerFollowup(
+      Map<String, dynamic> question, String value) async {
+    setState(() => _followupAnswer = value);
+    await widget.telemetry.track(
+      'followup_question_answered',
+      requestId: _requestId(),
+      payload: {
+        'question_id': (question['id'] ?? '').toString(),
+        'answer_value': value,
+      },
+    );
+  }
+
+  void _trackToolsExpanded() {
+    unawaited(
+      widget.telemetry.track(
+        'tools_section_expanded',
+        requestId: _requestId(),
+        contentVersion: _contentVersionValue(),
+        payload: {'problem_id': widget.problemId},
+      ),
+    );
+  }
+
   String? _currentLabel() {
     final primary = _primaryIntent();
     final label = (primary?['label'] ?? primary?['name'])?.toString().trim();
@@ -306,7 +357,10 @@ class _ResultScreenState extends State<ResultScreen> {
       _snack('缺少 problemId，无法保存为基线');
       return;
     }
-    if (requestId == null || requestId.isEmpty || label == null || confidence == null) {
+    if (requestId == null ||
+        requestId.isEmpty ||
+        label == null ||
+        confidence == null) {
       _snack('当前结果信息不完整，无法保存为基线');
       return;
     }
@@ -317,7 +371,8 @@ class _ResultScreenState extends State<ResultScreen> {
       requestId: requestId,
       label: label,
       confidence: confidence,
-      createdAtIso: _currentResultAtIso ?? DateTime.now().toUtc().toIso8601String(),
+      createdAtIso:
+          _currentResultAtIso ?? DateTime.now().toUtc().toIso8601String(),
     );
 
     setState(() => _savingBaseline = true);
@@ -337,17 +392,16 @@ class _ResultScreenState extends State<ResultScreen> {
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('成就解锁：初次复测'),
-            content: const Text('你已经开始持续观察这个问题啦'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('知道了'),
-              ),
-            ],
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('成就解锁：初次复测'),
+        content: const Text('你已经开始持续观察这个问题啦'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('知道了'),
           ),
+        ],
+      ),
     );
   }
 
@@ -393,9 +447,12 @@ class _ResultScreenState extends State<ResultScreen> {
 
       final baselinePercent = formatConfidencePercent(baseline.confidence);
       final currentPercent = formatConfidencePercent(_currentConfidenceValue());
-      final diff =
-          (baselinePercent != null && currentPercent != null) ? (currentPercent - baselinePercent) : null;
-      final direction = diff == null ? null : (diff == 0 ? 'same' : (diff > 0 ? 'up' : 'down'));
+      final diff = (baselinePercent != null && currentPercent != null)
+          ? (currentPercent - baselinePercent)
+          : null;
+      final direction = diff == null
+          ? null
+          : (diff == 0 ? 'same' : (diff > 0 ? 'up' : 'down'));
 
       await widget.telemetry.track(
         'retest_completed',
@@ -457,7 +514,8 @@ class _ResultScreenState extends State<ResultScreen> {
       );
       final directShareAsset = res['share_asset'];
       if (directShareAsset is Map) {
-        final template = directShareAsset['share_text_template']?.toString().trim();
+        final template =
+            directShareAsset['share_text_template']?.toString().trim();
         if (template != null && template.isNotEmpty) return template;
       }
 
@@ -465,7 +523,8 @@ class _ResultScreenState extends State<ResultScreen> {
       if (nestedBundle is Map) {
         final nestedShareAsset = nestedBundle['share_asset'];
         if (nestedShareAsset is Map) {
-          final template = nestedShareAsset['share_text_template']?.toString().trim();
+          final template =
+              nestedShareAsset['share_text_template']?.toString().trim();
           if (template != null && template.isNotEmpty) return template;
         }
       }
@@ -478,9 +537,19 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Future<String> _buildShareText() async {
     final primary = _resp?['primary_intent'];
-    final label = (primary is Map ? (primary['label'] ?? primary['name']) : primary)?.toString();
-    final confidencePercent = formatConfidencePercent(primary is Map ? primary['confidence'] : null);
-    final template = await _fetchShareTextTemplate() ?? defaultShareTemplate;
+    final label =
+        (primary is Map ? (primary['label'] ?? primary['name']) : primary)
+            ?.toString();
+    final confidencePercent =
+        formatConfidencePercent(primary is Map ? primary['confidence'] : null);
+
+    // 优先使用推理响应里已组装的 share_asset，避免额外请求。
+    final responseShare = _asMap(_resp?['share_asset']);
+    final responseTemplate =
+        (responseShare?['share_text_template'] ?? '').toString().trim();
+    final template = responseTemplate.isNotEmpty
+        ? responseTemplate
+        : (await _fetchShareTextTemplate() ?? defaultShareTemplate);
 
     return buildShareTextFromTemplate(
       template: template,
@@ -528,7 +597,7 @@ class _ResultScreenState extends State<ResultScreen> {
     );
     try {
       final text = await _buildShareText();
-      await SharePlus.instance.share(ShareParams(text: text));
+      await Share.share(text);
       await widget.telemetry.track(
         'share_completed',
         requestId: rid,
@@ -542,21 +611,291 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
+  List<String> _asStringList(dynamic v) {
+    if (v is! List) return const [];
+    return v
+        .map((e) =>
+            e is Map ? (e['text'] ?? e['title'] ?? e).toString() : e.toString())
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
+  }
+
+  Widget _sectionTitle(BuildContext context, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 6),
+      child: Text(
+        text,
+        style: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+
+  Widget _buildFollowupCard(BuildContext context, Map<String, dynamic> q) {
+    final text = (q['text'] ?? '').toString().trim();
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    final options = _asListOfMap(q['options']);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('帮我校准一下',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(text),
+            if (options.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: options.map((o) {
+                  final value = (o['value'] ?? '').toString();
+                  final label = (o['label'] ?? value).toString();
+                  return ChoiceChip(
+                    label: Text(label.isNotEmpty ? label : value),
+                    selected: _followupAnswer == value,
+                    onSelected: (selected) {
+                      if (selected) unawaited(_answerFollowup(q, value));
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+            if (_followupAnswer != null) ...[
+              const SizedBox(height: 8),
+              const Text('已记录，谢谢～',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF2E7D32))),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsSection(
+      BuildContext context, List<Map<String, dynamic>> suggestions) {
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(context, '建议'),
+        ...suggestions.map((s) {
+          final title = (s['title'] ?? '').toString();
+          final steps = _asStringList(s['steps']);
+          final window = s['expected_window_hours'];
+          final windowHours =
+              window is num ? window.toInt() : int.tryParse('$window');
+          final retestTip = (s['retest_tip'] ?? '').toString().trim();
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.isNotEmpty ? title : '建议',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  if (steps.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...steps.map((t) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('• $t'),
+                        )),
+                  ],
+                  if (windowHours != null && windowHours > 0) ...[
+                    const SizedBox(height: 4),
+                    Text('预计 $windowHours 小时内可观察',
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                  if (retestTip.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('复测提示：$retestTip',
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildDegradedSuggestions(
+      BuildContext context, List<Map<String, dynamic>> suggestions) {
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+    return Card(
+      child: ExpansionTile(
+        title: const Text('先按问题库建议排查'),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        children: suggestions.map((s) {
+          final title = (s['title'] ?? '').toString();
+          final steps = _asStringList(s['steps']);
+          return ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(title.isNotEmpty ? title : '建议'),
+            subtitle: steps.isEmpty ? null : Text(steps.join('；')),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildRiskCard(BuildContext context, Map<String, dynamic> risk) {
+    final level = (risk['level'] ?? 'green').toString();
+    final message = (risk['message'] ?? '').toString().trim();
+    if (message.isEmpty) return const SizedBox.shrink();
+
+    Color color;
+    String label;
+    switch (level) {
+      case 'red':
+        color = const Color(0xFFC62828);
+        label = '红灯';
+        break;
+      case 'yellow':
+        color = const Color(0xFFF9A825);
+        label = '黄灯';
+        break;
+      default:
+        color = const Color(0xFF2E7D32);
+        label = '绿灯';
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.health_and_safety_outlined, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('风险提示 · $label',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w800, color: color)),
+                  const SizedBox(height: 4),
+                  Text(message),
+                  const SizedBox(height: 6),
+                  Text('本结果不构成医疗诊断，出现异常请及时咨询兽医。',
+                      style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolsSection(BuildContext context, Map<String, dynamic> tools) {
+    final blocks = _asListOfMap(tools['content_blocks']);
+    if (blocks.isEmpty) return const SizedBox.shrink();
+    final collapsed = tools['collapsed_by_default'] != false;
+
+    return Card(
+      child: ExpansionTile(
+        title: const Text('省力工具（可选）'),
+        subtitle: const Text('不买也能先按建议做'),
+        initiallyExpanded: !collapsed,
+        onExpansionChanged: (open) {
+          if (open) _trackToolsExpanded();
+        },
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        children: blocks.map((b) => _buildToolBlock(context, b)).toList(),
+      ),
+    );
+  }
+
+  Widget _buildToolBlock(BuildContext context, Map<String, dynamic> block) {
+    final type = (block['type'] ?? '').toString();
+    final title = (block['title'] ?? '').toString();
+
+    if (type == 'efficiency_list') {
+      final items = _asListOfMap(block['items']);
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title.isNotEmpty)
+              Text(title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+            ...items.map((it) {
+              final name =
+                  (it['name'] ?? it['title'] ?? it['sku_key'] ?? '').toString();
+              final reason = (it['reason'] ?? '').toString();
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(name.isNotEmpty ? name : it.toString()),
+                subtitle: reason.isEmpty ? null : Text(reason),
+              );
+            }),
+          ],
+        ),
+      );
+    }
+
+    final bullets = _asStringList(block['bullets']);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty)
+            Text(title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          ...bullets.map((t) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('• $t'),
+              )),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRetestCompareCard(BuildContext context) {
     final baseline = _baseline;
     final currentLabel = _currentLabel();
     final baselineConfidence = formatConfidencePercent(baseline?.confidence);
-    final currentConfidence = formatConfidencePercent(_currentConfidenceValue());
-    final labelChanged = baseline != null && currentLabel != null && baseline.label != currentLabel;
+    final currentConfidence =
+        formatConfidencePercent(_currentConfidenceValue());
+    final labelChanged = baseline != null &&
+        currentLabel != null &&
+        baseline.label != currentLabel;
 
     if (!_hasComparableBaseline || baseline == null || currentLabel == null) {
       return const SizedBox.shrink();
     }
 
-    final deltaText =
-        baselineConfidence != null && currentConfidence != null
-            ? formatConfidenceDelta(currentConfidence, baselineConfidence)
-            : '-';
+    final deltaText = baselineConfidence != null && currentConfidence != null
+        ? formatConfidenceDelta(currentConfidence, baselineConfidence)
+        : '-';
 
     return Card(
       child: Padding(
@@ -567,11 +906,13 @@ class _ResultScreenState extends State<ResultScreen> {
             Text('复测对比', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 10),
             Text('上次：${baseline.label}'),
-            Text('上次置信度：${baselineConfidence == null ? '-' : '$baselineConfidence%'}'),
+            Text(
+                '上次置信度：${baselineConfidence == null ? '-' : '$baselineConfidence%'}'),
             Text('上次时间：${formatIsoTime(baseline.createdAtIso)}'),
             const SizedBox(height: 8),
             Text('本次：$currentLabel'),
-            Text('本次置信度：${currentConfidence == null ? '-' : '$currentConfidence%'}'),
+            Text(
+                '本次置信度：${currentConfidence == null ? '-' : '$currentConfidence%'}'),
             Text('本次时间：${formatIsoTime(_currentResultAtIso)}'),
             const SizedBox(height: 10),
             Text(labelChanged ? '标签发生变化' : '标签保持一致'),
@@ -626,7 +967,10 @@ class _ResultScreenState extends State<ResultScreen> {
             children: [
               Text(
                 '分析失败',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
               Text(_error ?? '未知错误', style: const TextStyle(color: Colors.red)),
@@ -663,7 +1007,8 @@ class _ResultScreenState extends State<ResultScreen> {
         break;
       case ResultPageState.degraded:
         final message = (resp?['message'] ?? '本次分析已降级').toString();
-        final reason = (resp?['degraded_reason'] ?? resp?['reason'] ?? '-').toString();
+        final reason =
+            (resp?['degraded_reason'] ?? resp?['reason'] ?? '-').toString();
         body = Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -671,7 +1016,10 @@ class _ResultScreenState extends State<ResultScreen> {
             children: [
               Text(
                 '本次结果不可用（降级）',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 10),
               Card(
@@ -682,11 +1030,17 @@ class _ResultScreenState extends State<ResultScreen> {
                     children: [
                       Text(message),
                       const SizedBox(height: 8),
-                      Text('degraded_reason：$reason', style: Theme.of(context).textTheme.bodySmall),
+                      Text('degraded_reason：$reason',
+                          style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
                 ),
               ),
+              if (_asListOfMap(resp?['suggestions']).isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildDegradedSuggestions(
+                    context, _asListOfMap(resp?['suggestions'])),
+              ],
               const SizedBox(height: 12),
               Wrap(
                 spacing: 10,
@@ -722,18 +1076,30 @@ class _ResultScreenState extends State<ResultScreen> {
         break;
       case ResultPageState.success:
         final primary = resp?['primary_intent'];
-        final label = _currentLabel() ?? (primary is Map ? (primary['label'] ?? primary['name']) : primary)?.toString() ?? '-';
-        final confidence = formatConfidencePercent(primary is Map ? primary['confidence'] : null);
+        final label = _currentLabel() ??
+            (primary is Map ? (primary['label'] ?? primary['name']) : primary)
+                ?.toString() ??
+            '-';
+        final confidence = formatConfidencePercent(
+            primary is Map ? primary['confidence'] : null);
 
         final explanationsRaw = resp?['explanations'];
-        final explanations = (explanationsRaw is List) ? explanationsRaw : const [];
+        final explanations =
+            (explanationsRaw is List) ? explanationsRaw : const [];
+        final followup = _asMap(resp?['followup_question']);
+        final suggestions = _asListOfMap(resp?['suggestions']);
+        final risk = _asMap(resp?['risk_level']);
+        final tools = _asMap(resp?['optional_tools_section']);
 
         body = ListView(
           padding: const EdgeInsets.all(16),
           children: [
             Text(
               '分析结果',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
             Card(
@@ -742,10 +1108,11 @@ class _ResultScreenState extends State<ResultScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('primary_intent：$label', style: Theme.of(context).textTheme.titleMedium),
+                    Text('更像：$label',
+                        style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 6),
                     Text(
-                      'confidence：${confidence == null ? '-' : '$confidence%'}',
+                      '置信度：${confidence == null ? '-' : '$confidence%'}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -775,7 +1142,7 @@ class _ResultScreenState extends State<ResultScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              '保存为基线',
+                              '建立复测基线',
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 4),
@@ -786,7 +1153,9 @@ class _ResultScreenState extends State<ResultScreen> {
                             ),
                             const SizedBox(height: 10),
                             FilledButton(
-                              onPressed: _savingBaseline ? null : _saveCurrentAsBaseline,
+                              onPressed: _savingBaseline
+                                  ? null
+                                  : _saveCurrentAsBaseline,
                               child: Text(_savingBaseline ? '保存中…' : '保存为基线'),
                             ),
                           ],
@@ -806,7 +1175,9 @@ class _ResultScreenState extends State<ResultScreen> {
               ...explanations.map((e) {
                 if (e is Map) {
                   final factor = (e['factor'] ?? e['title'] ?? '').toString();
-                  final text = (e['text'] ?? e['explanation'] ?? e['reason'] ?? '').toString();
+                  final text =
+                      (e['text'] ?? e['explanation'] ?? e['reason'] ?? '')
+                          .toString();
                   final title = factor.isNotEmpty ? factor : '解释';
                   return ListTile(
                     dense: true,
@@ -816,6 +1187,22 @@ class _ResultScreenState extends State<ResultScreen> {
                 }
                 return ListTile(dense: true, title: Text(e.toString()));
               }),
+            if (followup != null) ...[
+              const SizedBox(height: 12),
+              _buildFollowupCard(context, followup),
+            ],
+            if (suggestions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildSuggestionsSection(context, suggestions),
+            ],
+            if (risk != null) ...[
+              const SizedBox(height: 12),
+              _buildRiskCard(context, risk),
+            ],
+            if (tools != null) ...[
+              const SizedBox(height: 12),
+              _buildToolsSection(context, tools),
+            ],
             const SizedBox(height: 10),
             Wrap(
               spacing: 10,
@@ -881,7 +1268,7 @@ class _DebugSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = resp ?? const {};
-    final encoder = const JsonEncoder.withIndent('  ');
+    const encoder = JsonEncoder.withIndent('  ');
     final pretty = encoder.convert(r);
 
     String v(String k) => (r[k] ?? '-').toString();
@@ -906,7 +1293,10 @@ class _DebugSection extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 140, child: Text('$k：', style: const TextStyle(fontWeight: FontWeight.w600))),
+          SizedBox(
+              width: 140,
+              child: Text('$k：',
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
           Expanded(child: SelectableText(val)),
         ],
       ),
