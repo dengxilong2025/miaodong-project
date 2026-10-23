@@ -23,6 +23,17 @@ type Bundle struct {
 	Questions   []map[string]any `json:"questions"`
 	Suggestions []map[string]any `json:"suggestions"`
 	ToolsGuides map[string]any   `json:"tools_guides,omitempty"`
+	ShareAsset  map[string]any   `json:"share_asset,omitempty"`
+}
+
+// DefaultShareAsset 是结果页分享物料的最小契约（见 docs/tech/API_CONTRACT.md）。
+// 放在 content 包内，供结果模板与推理组装复用，避免两处文案漂移。
+func DefaultShareAsset() map[string]any {
+	return map[string]any{
+		"share_title":         "测一测我家猫在想啥",
+		"share_text_template": "我家猫这次更像：{label}（{confidence}%）。来喵懂试试 #喵懂 #喵测",
+		"card_style":          "result_card_v1",
+	}
 }
 
 func clampLimit(limit int) int {
@@ -176,7 +187,12 @@ where tg.problem_id=$1 and tg.status='published'
 	return b, nil
 }
 
-// GetResultTemplate reuses the bundle for v0.1.
+// GetResultTemplate 在 problem bundle 基础上补充分享物料。
 func GetResultTemplate(ctx context.Context, db *sql.DB, problemID string) (Bundle, error) {
-	return GetProblemBundle(ctx, db, problemID)
+	b, err := GetProblemBundle(ctx, db, problemID)
+	if err != nil {
+		return b, err
+	}
+	b.ShareAsset = DefaultShareAsset()
+	return b, nil
 }

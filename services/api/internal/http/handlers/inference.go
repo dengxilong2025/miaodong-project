@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net"
@@ -15,6 +16,22 @@ import (
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/content"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/db"
 	"github.com/dengxilong2025/miaodong-project/services/api/internal/inference"
+	"github.com/dengxilong2025/miaodong-project/services/api/internal/result"
+)
+
+// 测试可替换的依赖点（与 admin 内容 CRUD 的 openAdminContentDB 同思路）。
+var (
+	openInferenceDB = db.Open
+
+	loadProblemBundleForInference = func(ctx context.Context, conn *sql.DB, problemID string) (content.Bundle, error) {
+		if conn == nil {
+			return content.Bundle{}, errors.New("db unavailable")
+		}
+		// 内容组装不能拖慢推理主链路。
+		ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+		return content.GetProblemBundle(ctx, conn, problemID)
+	}
 )
 
 func inferenceTimeout() time.Duration {
@@ -31,12 +48,10 @@ func inferenceTimeout() time.Duration {
 
 // resolveInferenceContentVersion 读取 releases 的发布/灰度结果。
 // DB 不可用时回退到 1，保证推理链路本身不被内容库拖垮。
-func resolveInferenceContentVersion(r *http.Request) int {
-	conn, err := db.Open()
-	if err != nil {
+func resolveInferenceContentVersion(r *http.Request, conn *sql.DB) int {
+	if conn == nil {
 		return 1
 	}
-	defer conn.Close()
 
 	// 内容版本解析不能拖慢推理：DB 抖动时最多等 300ms，然后走降级版本。
 	ctx, cancel := context.WithTimeout(r.Context(), 300*time.Millisecond)
@@ -89,16 +104,32 @@ func Inference(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	var in struct {
-		AudioURL string         `json:"audio_url"`
-		Context  map[string]any `json:"context"`
+		AudioURL       string         `json:"audio_url"`
+		ProblemID      string         `json:"problem_id"`
+		Entry          string         `json:"entry"`
+		Context        map[string]any `json:"context"`
+		ContextAnswers map[string]any `json:"context_answers"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 
+	conn, dbErr := openInferenceDB()
+	if dbErr == nil && conn != nil {
+		defer conn.Close()
+	} else {
+		conn = nil
+	}
+
 	requestID := "req_" + randHex(12)
-	contentVersion := resolveInferenceContentVersion(r)
+	contentVersion := resolveInferenceContentVersion(r, conn)
+
+	// 兼容 API_CONTRACT 的 context_answers 与客户端现用的 context。
+	inferenceContext := in.Context
+	if len(inferenceContext) == 0 {
+		inferenceContext = in.ContextAnswers
+	}
 
 	base := os.Getenv("MIAODONG_INFERENCE_URL")
 	if base == "" {
@@ -112,11 +143,11 @@ func Inference(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	c := inference.NewWithTimeout(base, timeout)
-	out, err := c.Infer(ctx, inference.InferReq{AudioURL: in.AudioURL, Context: in.Context})
+	out, err := c.Infer(ctx, inference.InferReq{AudioURL: in.AudioURL, Context: inferenceContext})
 	latency := time.Since(t0).Milliseconds()
 	if err != nil {
 		reason := degradedReason(err)
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		resp := map[string]any{
 			"request_id":           requestID,
 			"schema_version":       "1.0",
 			"model_version":        "degraded",
@@ -128,7 +159,16 @@ func Inference(w http.ResponseWriter, r *http.Request) {
 			"fallback": map[string]any{
 				"next": "open_problem_library",
 			},
-		})
+		}
+
+		// 降级策略：带 problem_id 时补“仅问题库建议”，不伪装成完整结果。
+		if in.ProblemID != "" {
+			if b, err := loadProblemBundleForInference(r.Context(), conn, in.ProblemID); err == nil {
+				result.ApplyDegradedSuggestions(resp, b)
+			}
+		}
+
+		_ = json.NewEncoder(w).Encode(resp)
 		return
 	}
 
@@ -139,6 +179,13 @@ func Inference(w http.ResponseWriter, r *http.Request) {
 	out["inference_latency_ms"] = latency
 	if _, ok := out["schema_version"]; !ok {
 		out["schema_version"] = "1.0"
+	}
+
+	// 成功后按 API_CONTRACT 组装问题库内容（追问/建议/风险/工具区/分享）。
+	if in.ProblemID != "" {
+		if b, err := loadProblemBundleForInference(r.Context(), conn, in.ProblemID); err == nil {
+			result.ApplyContent(out, b)
+		}
 	}
 
 	_ = json.NewEncoder(w).Encode(out)

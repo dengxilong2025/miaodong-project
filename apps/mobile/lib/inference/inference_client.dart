@@ -8,11 +8,16 @@ class InferenceClient {
   Future<Map<String, dynamic>> infer({
     required String audioUrl,
     required Map<String, dynamic> context,
+    String? problemId,
   }) async {
-    return api.postJson('/v1/inference', {
+    final body = <String, dynamic>{
       'audio_url': audioUrl,
       'context': context,
-    });
+    };
+    if (problemId != null && problemId.trim().isNotEmpty) {
+      body['problem_id'] = problemId;
+    }
+    return api.postJson('/v1/inference', body);
   }
 
   Future<Map<String, dynamic>> sendFeedback({

@@ -175,7 +175,11 @@ class _ResultScreenState extends State<ResultScreen> {
         },
       );
 
-      final res = await _inference.infer(audioUrl: widget.audioUrl, context: ctx);
+      final res = await _inference.infer(
+        audioUrl: widget.audioUrl,
+        context: ctx,
+        problemId: widget.problemId,
+      );
       final degraded = (res['degraded'] == true) || (res['degraded']?.toString() == 'true');
       final currentAt =
           res['created_at']?.toString().trim().isNotEmpty == true

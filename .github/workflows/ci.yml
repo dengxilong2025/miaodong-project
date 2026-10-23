@@ -147,9 +147,10 @@ jobs:
           
           curl -fsS "${API_URL}/v1/problems?limit=3" > /tmp/problems.json
           curl -fsS "${API_URL}/v1/problems/night_meow" > /tmp/problem_night.json
+          curl -fsS "${API_URL}/v1/templates/result?problem_id=night_meow" > /tmp/result_template.json
           python3 - <<'PY'
           import json
-          
+
           d=json.load(open("/tmp/problems.json"))
           items=d.get("items",[])
           assert len(items)==3, items
@@ -165,7 +166,88 @@ jobs:
           assert len(ss)>=3, ss
           assert tg.get("problem_id")=="night_meow", tg
           assert b.get("content_version")==1, b.get("content_version")
-          print("E2E content api: OK", ids, "questions=", len(qs), "suggestions=", len(ss), "tools=yes")
+
+          tpl=json.load(open("/tmp/result_template.json"))
+          share=tpl.get("share_asset") or {}
+          assert share.get("card_style")=="result_card_v1", share
+          assert "{label}" in (share.get("share_text_template") or ""), share
+          print("E2E content api: OK", ids, "questions=", len(qs), "suggestions=", len(ss), "tools=yes", "share=yes")
+          PY
+
+      - name: "E2E: inference content composition"
+        env:
+          MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
+          GOFLAGS: -mod=mod
+        run: |
+          set -euo pipefail
+          API_URL="http://127.0.0.1:8080"
+          INFERENCE_URL="http://127.0.0.1:8001"
+
+          cd services/inference
+          python -m pip install -r requirements.txt > /tmp/pip-inference.log 2>&1
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/miaodong-inference.log 2>&1 &
+          INFERENCE_PID=$!
+          trap 'kill "$INFERENCE_PID" >/dev/null 2>&1 || true' EXIT
+
+          for i in {1..60}; do
+            if curl -fsS "${INFERENCE_URL}/health" >/dev/null; then
+              echo "inference healthy"
+              break
+            fi
+            echo "waiting inference... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              tail -n 200 /tmp/miaodong-inference.log || true
+              exit 1
+            fi
+          done
+
+          cd ../api
+          MIAODONG_INFERENCE_URL="${INFERENCE_URL}" go run ./cmd/api > /tmp/miaodong-api.log 2>&1 &
+          API_PID=$!
+          trap 'kill "$API_PID" "$INFERENCE_PID" >/dev/null 2>&1 || true' EXIT
+
+          for i in {1..60}; do
+            if curl -fsS "${API_URL}/v1/health" >/dev/null; then
+              echo "api healthy"
+              break
+            fi
+            echo "waiting api... ($i)"
+            sleep 1
+            if [ "$i" = "60" ]; then
+              tail -n 200 /tmp/miaodong-api.log || true
+              exit 1
+            fi
+          done
+
+          curl -fsS -X POST "${API_URL}/v1/inference" \
+            -H "Content-Type: application/json" \
+            -d '{"audio_url":"http://example.com/a.m4a","problem_id":"night_meow","context":{"time_of_day":"night"}}' \
+            > /tmp/inference_composed.json
+
+          python3 - <<'PY'
+          import json
+
+          d=json.load(open("/tmp/inference_composed.json"))
+          assert d.get("degraded") is False, d
+          assert d.get("content_version")==1, d.get("content_version")
+
+          q=d.get("followup_question") or {}
+          assert q.get("id"), q
+
+          ss=d.get("suggestions") or []
+          assert 1 <= len(ss) <= 3, ss
+
+          risk=d.get("risk_level") or {}
+          assert risk.get("level")=="green", risk
+
+          tools=d.get("optional_tools_section") or {}
+          assert tools.get("collapsed_by_default") is True, tools
+          assert len(tools.get("content_blocks") or [])>=1, tools
+
+          share=d.get("share_asset") or {}
+          assert "{label}" in (share.get("share_text_template") or ""), share
+          print("E2E inference composition: OK", q.get("id"), "suggestions=", len(ss))
           PY
 
       - name: "E2E: admin content crud"
