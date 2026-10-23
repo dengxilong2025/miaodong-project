@@ -24,6 +24,7 @@ type Problem struct {
 	Title          string            `json:"title"`
 	Summary        string            `json:"summary"`
 	Tags           []string          `json:"tags"`
+	Priority       int               `json:"priority"`
 	CauseFramework []string          `json:"cause_framework"`
 	RetestPlan72h  []string          `json:"retest_plan_72h"`
 	RiskLevelCopy  map[string]string `json:"risk_level_copy"`

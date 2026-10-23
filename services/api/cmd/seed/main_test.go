@@ -38,7 +38,7 @@ func TestBuildSQL_ImportsAllSeedContent(t *testing.T) {
 		t.Fatalf("tools_guides count: got %d want %d", got, len(s.ToolsGuides))
 	}
 
-	for _, field := range []string{"cause_framework", "retest_plan_72h", "risk_level_copy"} {
+	for _, field := range []string{"priority", "cause_framework", "retest_plan_72h", "risk_level_copy"} {
 		if !strings.Contains(sqlText, field) {
 			t.Fatalf("missing problem field %s", field)
 		}

@@ -55,6 +55,7 @@ type adminProblem struct {
 	Title     string   `json:"title"`
 	Summary   string   `json:"summary"`
 	Tags      []string `json:"tags"`
+	Priority  int      `json:"priority"`
 	Status    string   `json:"status"`
 	UpdatedAt string   `json:"updated_at"`
 }
@@ -67,7 +68,7 @@ func adminListProblems(w http.ResponseWriter, _ *http.Request) {
 	}
 	defer conn.Close()
 
-	rows, err := conn.Query(`select id, title, summary, tags, status, updated_at from problems order by updated_at desc limit 200`)
+	rows, err := conn.Query(`select id, title, summary, tags, priority, status, updated_at from problems order by priority desc, updated_at desc limit 200`)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -79,7 +80,7 @@ func adminListProblems(w http.ResponseWriter, _ *http.Request) {
 		var p adminProblem
 		var tagsJSON []byte
 		var updated time.Time
-		if err := rows.Scan(&p.ID, &p.Title, &p.Summary, &tagsJSON, &p.Status, &updated); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.Summary, &tagsJSON, &p.Priority, &p.Status, &updated); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -103,8 +104,8 @@ func adminGetProblem(w http.ResponseWriter, r *http.Request, id string) {
 	var p adminProblem
 	var tagsJSON []byte
 	var updated time.Time
-	err = conn.QueryRow(`select id, title, summary, tags, status, updated_at from problems where id=$1`, id).
-		Scan(&p.ID, &p.Title, &p.Summary, &tagsJSON, &p.Status, &updated)
+	err = conn.QueryRow(`select id, title, summary, tags, priority, status, updated_at from problems where id=$1`, id).
+		Scan(&p.ID, &p.Title, &p.Summary, &tagsJSON, &p.Priority, &p.Status, &updated)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
@@ -122,11 +123,12 @@ func adminGetProblem(w http.ResponseWriter, r *http.Request, id string) {
 
 func adminCreateProblem(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Actor  string   `json:"actor"`
-		ID     string   `json:"id"`
-		Title  string   `json:"title"`
-		Summary string  `json:"summary"`
-		Tags   []string `json:"tags"`
+		Actor    string   `json:"actor"`
+		ID       string   `json:"id"`
+		Title    string   `json:"title"`
+		Summary  string   `json:"summary"`
+		Tags     []string `json:"tags"`
+		Priority *int     `json:"priority"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -138,6 +140,10 @@ func adminCreateProblem(w http.ResponseWriter, r *http.Request) {
 	if in.ID == "" || in.Title == "" || in.Summary == "" {
 		http.Error(w, "missing fields: id/title/summary", http.StatusBadRequest)
 		return
+	}
+	priority := 0
+	if in.Priority != nil {
+		priority = *in.Priority
 	}
 
 	conn, err := db.Open()
@@ -155,8 +161,8 @@ func adminCreateProblem(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = tx.Rollback() }()
 
 	tagsB, _ := json.Marshal(in.Tags)
-	_, err = tx.Exec(`insert into problems (id,title,summary,tags,status) values ($1,$2,$3,$4::jsonb,'draft')`,
-		in.ID, in.Title, in.Summary, string(tagsB),
+	_, err = tx.Exec(`insert into problems (id,title,summary,tags,priority,status) values ($1,$2,$3,$4::jsonb,$5,'draft')`,
+		in.ID, in.Title, in.Summary, string(tagsB), priority,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -164,9 +170,10 @@ func adminCreateProblem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = insertAudit(tx, in.Actor, "create", "problem", in.ID, map[string]any{
-		"title":   in.Title,
-		"summary": in.Summary,
-		"tags":    in.Tags,
+		"title":    in.Title,
+		"summary":  in.Summary,
+		"tags":     in.Tags,
+		"priority": priority,
 	})
 
 	if err := tx.Commit(); err != nil {
@@ -181,11 +188,12 @@ func adminCreateProblem(w http.ResponseWriter, r *http.Request) {
 
 func adminPatchProblem(w http.ResponseWriter, r *http.Request, id string) {
 	var in struct {
-		Actor   string    `json:"actor"`
-		Title   *string   `json:"title"`
-		Summary *string   `json:"summary"`
-		Tags    *[]string `json:"tags"`
-		Status  *string   `json:"status"`
+		Actor    string    `json:"actor"`
+		Title    *string   `json:"title"`
+		Summary  *string   `json:"summary"`
+		Tags     *[]string `json:"tags"`
+		Priority *int      `json:"priority"`
+		Status   *string   `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -232,6 +240,12 @@ func adminPatchProblem(w http.ResponseWriter, r *http.Request, id string) {
 		sets = append(sets, "tags=$"+itoa(n)+"::jsonb")
 		args = append(args, string(b))
 		diff["tags"] = *in.Tags
+		n++
+	}
+	if in.Priority != nil {
+		sets = append(sets, "priority=$"+itoa(n))
+		args = append(args, *in.Priority)
+		diff["priority"] = *in.Priority
 		n++
 	}
 	if in.Status != nil {

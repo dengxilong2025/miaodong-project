@@ -63,7 +63,7 @@ func ListProblems(ctx context.Context, db *sql.DB, limit int) ([]ProblemSummary,
 select id, title, summary, tags
 from problems
 where status='published'
-order by id asc
+order by priority desc, id asc
 limit $1
 `, limit)
 	if err != nil {

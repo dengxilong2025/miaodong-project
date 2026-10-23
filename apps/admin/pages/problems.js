@@ -159,6 +159,7 @@
           title: p.title || "",
           summary: p.summary || "",
           tagsText: tagsArrayToInput(p.tags || []),
+          priority: Number(p.priority || 0),
           status: p.status || "draft",
         };
         state.dirty = false;
@@ -241,6 +242,13 @@
                   <input class="input" id="problemTagsInput" value="${escapeHTML(
                     state.form.tagsText
                   )}" placeholder="e.g. 夜间, 行为, 叫声" />
+                </div>
+
+                <div class="field">
+                  <label>展示优先级 priority（越大越靠前）</label>
+                  <input class="input cell-mono" id="problemPriorityInput" type="number" value="${escapeHTML(
+                    String(state.form.priority ?? 0)
+                  )}" placeholder="例如：100" />
                 </div>
 
                 <div class="field">
@@ -354,6 +362,7 @@
           const titleInput = $("#problemTitleInput", editorEl);
           const summaryInput = $("#problemSummaryInput", editorEl);
           const tagsInput = $("#problemTagsInput", editorEl);
+          const priorityInput = $("#problemPriorityInput", editorEl);
           const statusSelect = $("#problemStatusSelect", editorEl);
           const saveBtn = $("#problemSaveBtn", editorEl);
 
@@ -378,6 +387,11 @@
               state.form.tagsText = tagsInput.value;
               markDirty();
             });
+          if (priorityInput)
+            priorityInput.addEventListener("input", () => {
+              state.form.priority = Number(priorityInput.value || 0);
+              markDirty();
+            });
           if (statusSelect)
             statusSelect.addEventListener("change", () => {
               state.form.status = statusSelect.value;
@@ -393,6 +407,7 @@
               const title = String(state.form.title || "").trim();
               const summary = String(state.form.summary || "").trim();
               const tags = tagsInputToArray(state.form.tagsText || "");
+              const priority = Number(state.form.priority || 0);
               const status = String(state.form.status || "draft");
 
               // Only send changed fields (reduce audit noise).
@@ -400,6 +415,7 @@
               if (title !== String(prev.title || "")) patch.title = title;
               if (summary !== String(prev.summary || "")) patch.summary = summary;
               if (JSON.stringify(tags) !== JSON.stringify(prev.tags || [])) patch.tags = tags;
+              if (priority !== Number(prev.priority || 0)) patch.priority = priority;
               if (status !== String(prev.status || "")) patch.status = status;
 
               const keys = Object.keys(patch).filter((k) => k !== "actor");
@@ -1114,6 +1130,7 @@
             const active = id && id === state.selectedId ? "is-active" : "";
             const title = p && p.title ? String(p.title) : id;
             const status = p && p.status ? String(p.status) : "-";
+            const priority = p && p.priority !== undefined ? String(p.priority) : "-";
             return `
               <button type="button" class="problems-item ${active}" data-problem-id="${escapeHTML(
                 id
@@ -1121,6 +1138,7 @@
                 <div class="problems-item__title">${escapeHTML(title || id)}</div>
                 <div class="problems-item__meta">
                   <span class="pill pill--soft">#${escapeHTML(id || "-")}</span>
+                  <span class="pill pill--soft">P${escapeHTML(priority)}</span>
                   <span class="pill pill--soft">${escapeHTML(status)}</span>
                 </div>
               </button>

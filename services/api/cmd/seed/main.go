@@ -57,18 +57,24 @@ func buildSQL(s *content.Seed) (string, error) {
 	//   psql "$DSN" -f /tmp/seed.sql
 	out := "begin;\n"
 
-	for _, p := range s.Problems {
+	for i, p := range s.Problems {
+		priority := p.Priority
+		if priority <= 0 {
+			// 未显式配置时按 seed 顺序生成递减优先级（保持 PRD Top3 顺序）。
+			priority = (len(s.Problems) - i) * 10
+		}
 		out += fmt.Sprintf(
-			`insert into problems (id, title, summary, tags, cause_framework, retest_plan_72h, risk_level_copy, status)
-values (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, 'published')
+			`insert into problems (id, title, summary, tags, priority, cause_framework, retest_plan_72h, risk_level_copy, status)
+values (%s, %s, %s, %s::jsonb, %d, %s::jsonb, %s::jsonb, %s::jsonb, 'published')
 on conflict (id) do update set title=excluded.title, summary=excluded.summary, tags=excluded.tags,
-  cause_framework=excluded.cause_framework, retest_plan_72h=excluded.retest_plan_72h,
+  priority=excluded.priority, cause_framework=excluded.cause_framework, retest_plan_72h=excluded.retest_plan_72h,
   risk_level_copy=excluded.risk_level_copy, status=excluded.status, updated_at=now();
 `,
 			sqlQuote(p.ID),
 			sqlQuote(p.Title),
 			sqlQuote(p.Summary),
 			sqlQuote(jsonValue(p.Tags, "[]")),
+			priority,
 			sqlQuote(jsonValue(p.CauseFramework, "[]")),
 			sqlQuote(jsonValue(p.RetestPlan72h, "[]")),
 			sqlQuote(jsonValue(p.RiskLevelCopy, "{}")),

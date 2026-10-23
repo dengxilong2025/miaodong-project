@@ -180,7 +180,7 @@ jobs:
           items=d.get("items",[])
           assert len(items)==3, items
           ids=[it.get("id") for it in items]
-          assert any(i in ids for i in ["night_meow","cat_diarrhea","cat_vomit"]), ids
+          assert ids==["night_meow","always_meow","after_litter_meow"], ids
           assert d.get("content_version")==1, d.get("content_version")
 
           b=json.load(open("/tmp/problem_night.json"))

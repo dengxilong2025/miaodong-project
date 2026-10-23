@@ -81,13 +81,16 @@ def main() -> None:
         fail(f"seed meta.app 应为“喵懂”，实际为：{meta.get('app')!r}")
     ok("seed meta.app=喵懂")
 
-    # Top3问题
+    # Top3问题（顺序需与 PRD 一致：半夜叫 → 一直叫 → 拉完叫）
     problems = data.get("problems", [])
     ids = {p.get("id") for p in problems}
     required = {"night_meow", "always_meow", "after_litter_meow"}
     if not required.issubset(ids):
         fail(f"seed problems 缺少Top3：{sorted(required - ids)}")
-    ok("seed problems 包含Top3问题")
+    order = [p.get("id") for p in problems][:3]
+    if order != ["night_meow", "always_meow", "after_litter_meow"]:
+        fail(f"seed Top3 顺序应为 night/always/after_litter，实际：{order}")
+    ok("seed problems 包含Top3问题且顺序正确")
 
     # 增长模块优先级
     growth = data.get("growth_modules", {})
@@ -111,6 +114,8 @@ def main() -> None:
         fail("缺少 migrations/0001_init.sql")
     if not (ROOT / "services" / "api" / "migrations" / "0002_release_and_audit.sql").exists():
         fail("缺少 migrations/0002_release_and_audit.sql")
+    if not (ROOT / "services" / "api" / "migrations" / "0003_problem_priority.sql").exists():
+        fail("缺少 migrations/0003_problem_priority.sql")
     ok("migrations 文件存在")
 
     scan_for_legacy_brand()
