@@ -16,4 +16,6 @@ class InferResponse(BaseModel):
     primary_intent: Optional[Dict[str, Any]] = None
     explanations: List[Dict[str, Any]] = Field(default_factory=list)
     risk_badges: List[Dict[str, Any]] = Field(default_factory=list)
+    audio_normalized: bool = False
+    audio_meta: Dict[str, Any] = Field(default_factory=dict)
 

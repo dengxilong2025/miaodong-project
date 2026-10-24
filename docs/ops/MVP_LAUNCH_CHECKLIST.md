@@ -34,7 +34,7 @@
 | 内容 API / 推理编排 / 反馈复测 | ✅ | Go API + CI e2e |
 | 发布/灰度/回滚/审计 | ✅ | Admin API + e2e |
 | 指标聚合 + KPI + 渠道口径 | ✅ | 代码已支持；H5 渠道待接 |
-| 音频标准化（16k mono PCM） | ❌ | 转码服务未做（WBS 1.5） |
+| 音频标准化（16k mono PCM） | ✅ | `services/inference/app/audio.py` + pytest + e2e |
 | 签名 token + 限流 | ❌ | 当前 `dev-token-*`（WBS 3.6） |
 | 对象存储跨端配置 | ⚠️ | S3Mock 可用；生产 CORS/小程序代理未配（WBS 3.7） |
 | 分享物料渠道化 | ❌ | `share_asset.channel` 未实现（WBS 3.8） |

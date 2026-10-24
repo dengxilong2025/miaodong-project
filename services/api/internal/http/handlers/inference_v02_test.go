@@ -79,6 +79,34 @@ func TestInference_BadStatus(t *testing.T) {
 	}
 }
 
+func TestInference_AudioNormalizeFailed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":{"code":"AUDIO_NORMALIZE_FAILED","message":"bad audio"}}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("MIAODONG_INFERENCE_URL", srv.URL)
+	t.Setenv("MIAODONG_INFERENCE_TIMEOUT_MS", "3000")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/inference", strings.NewReader(`{"audio_url":"http://x"}`))
+	w := httptest.NewRecorder()
+	Inference(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", w.Code)
+	}
+
+	var out map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("invalid response json: %v, body=%s", err, w.Body.String())
+	}
+	if out["degraded"] != true || out["degraded_reason"] != "audio_normalize_failed" {
+		t.Fatalf("expected audio_normalize_failed: %v", out)
+	}
+}
+
 func TestInference_BadJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -139,4 +167,3 @@ func TestInference_Timeout(t *testing.T) {
 		t.Fatalf("missing inference_latency_ms: %v", out)
 	}
 }
-

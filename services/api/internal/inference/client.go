@@ -5,9 +5,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
+
+type HTTPError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("inference status %d: %s", e.StatusCode, e.Body)
+}
 
 type Client struct {
 	BaseURL string
@@ -25,7 +35,7 @@ func NewWithTimeout(baseURL string, timeout time.Duration) *Client {
 	}
 	return &Client{
 		BaseURL: baseURL,
-		HTTP:   &http.Client{Timeout: timeout},
+		HTTP:    &http.Client{Timeout: timeout},
 	}
 }
 
@@ -46,7 +56,8 @@ func (c *Client) Infer(ctx context.Context, req InferReq) (map[string]any, error
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("inference status %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
 	}
 	var out map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {

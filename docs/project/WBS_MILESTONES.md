@@ -49,7 +49,7 @@
 | 1.2 | Go API 骨架（`/v1/health`） | Backend | 1d | 1.1 | API 服务 | 200 + 单测 | 已实现 |
 | 1.3 | Python 推理骨架（`/infer` stub） | Inference | 1d | 1.1 | 推理服务 | 返回 schema/model version | 已实现 |
 | 1.4 | 音频链路约束（格式/时长/保存） | Mobile+Web+Backend | 1d | 1.1 | 录音策略 | 10 秒上限；m4a 优先；保存策略明确 | 进行中 |
-| 1.5 | **音频标准化/转码** | Backend+Inference | 2d | 1.4 | 转码服务 | 所有渠道统一转 16kHz/mono/PCM WAV；失败可观测 | 计划中 |
+| 1.5 | **音频标准化/转码** | Backend+Inference | 2d | 1.4 | 转码服务 | 所有渠道统一转 16kHz/mono/PCM WAV；失败可观测 | 已实现 |
 | 1.6 | **跨端访问（CORS/HTTPS/域名）** | Backend+Ops | 1d | 1.2 | 部署配置 | H5 可跨域调用；HTTPS；CORS 白名单 | 计划中 |
 
 ### 2.2 内容数据与发布系统
@@ -136,7 +136,7 @@
 | Flutter | 功能已实现 | 录音/上传/结果/问题库/复测/分享/埋点 | 补 android/ios 平台工程 4.1、真机验证 |
 | H5 验证端 | 未开始 | - | 4A.1-4A.4 |
 | 推理 | 占位 stub | Python 仅按 time_of_day 返回 | 定义“可信推理 v0.1” |
-| 跨端适配 | 未开始 | - | 1.5/1.6/3.6/3.7/3.8 |
+| 跨端适配 | 音频标准化已实现；其余未开始 | `services/inference/app/audio.py` | 1.6/3.6/3.7/3.8 |
 | 部署 | 未开始 | 仅本地 compose | Dockerfile/托管 DB/存储/HTTPS |
 | 合规 | 未开始 | 仅文案声明 | 7.5 |
 | 增长素材 | 部分 | SOP 文档 | 7.1 |

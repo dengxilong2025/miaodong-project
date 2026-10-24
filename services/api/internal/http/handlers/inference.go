@@ -84,6 +84,8 @@ func degradedReason(err error) string {
 	// 这里用 strings.Contains 做兜底归因。
 	msg := err.Error()
 	switch {
+	case strings.Contains(msg, "AUDIO_NORMALIZE_FAILED"):
+		return "audio_normalize_failed"
 	case strings.Contains(msg, "status"):
 		return "bad_status"
 	case strings.Contains(msg, "invalid character") || strings.Contains(msg, "unexpected EOF") || strings.Contains(msg, "json"):

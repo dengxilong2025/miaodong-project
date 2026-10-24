@@ -98,6 +98,14 @@ Response（结构要长期稳定）：
   "risk_badges": [
     { "code": "STRESS_SUSPECTED", "level": "info", "title": "应激疑似", "message": "仅为风险提示，非诊断…" }
   ],
+  "audio_normalized": true,
+  "audio_meta": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "sample_width": 2,
+    "duration_ms": 1800,
+    "format": "wav"
+  },
 
   "followup_question": {
     "id": "q_night_01",
@@ -132,6 +140,8 @@ Response（结构要长期稳定）：
   }
 }
 ```
+
+> 音频标准化失败时，推理服务返回 422 `AUDIO_NORMALIZE_FAILED`；Go API 不把失败伪装成成功结果，而是返回 `degraded=true`、`degraded_reason=audio_normalize_failed`，并保留问题库降级建议。
 
 ---
 
