@@ -44,6 +44,13 @@ def assert_doc_exists(rel: str) -> None:
     ok(f"文档存在：{rel}")
 
 
+def assert_file_exists(rel: str) -> None:
+    p = ROOT / rel
+    if not p.exists():
+        fail(f"缺少文件：{rel}")
+    ok(f"文件存在：{rel}")
+
+
 def scan_for_legacy_brand() -> None:
     legacy = "喵语"
     # 排除 Git 历史与二进制（这里只是简单扫描文本）
@@ -111,10 +118,17 @@ def main() -> None:
     assert_doc_exists("docs/project/DEV_WORKFLOW.md")
     assert_doc_exists("docs/ops/MVP_LAUNCH_CHECKLIST.md")
     assert_doc_exists("docs/adr/0004-multi-channel-and-low-cost-validation.md")
+    for rel in [
+        "apps/web/package.json",
+        "apps/web/package-lock.json",
+        "apps/web/README.md",
+        "apps/web/src/App.vue",
+    ]:
+        assert_file_exists(rel)
 
     # 计划完整性：多渠道与低成本验证必须出现在 WBS 中
     wbs = (ROOT / "docs" / "project" / "WBS_MILESTONES.md").read_text(encoding="utf-8")
-    for token in ["M6", "4A.1", "音频标准化", "签名 token"]:
+    for token in ["M6", "4A.1", "4A.2", "音频标准化", "签名 token"]:
         if token not in wbs:
             fail(f"WBS 缺少多渠道计划关键项：{token}")
     ok("WBS 包含多渠道/低成本验证计划")

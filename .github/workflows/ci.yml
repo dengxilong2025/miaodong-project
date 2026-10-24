@@ -90,6 +90,31 @@ jobs:
         working-directory: apps/mobile
         run: flutter test
 
+  web-h5:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install deps
+        working-directory: apps/web
+        run: npm ci --no-audit --no-fund
+
+      - name: Unit tests
+        working-directory: apps/web
+        run: npm test
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
+
   e2e-db:
     runs-on: ubuntu-latest
     steps:

@@ -42,6 +42,7 @@
 4. **验证**：
    - Go：`cd services/api && go test ./...`
    - Flutter：`cd apps/mobile && flutter analyze && flutter test`
+   - H5：`cd apps/web && npm test && npm run build`
    - 仓库：`python scripts/ci/validate_repo.py`
    - JS：`node --check apps/admin/admin.js ...`
 5. **文档**：更新 WBS 状态、接口契约/埋点（如涉及）

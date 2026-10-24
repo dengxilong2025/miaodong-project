@@ -24,7 +24,7 @@
 | Flutter android/ios 平台工程 | ❌ | 缺平台目录，无法直接打安装包（WBS 4.1） |
 | 真机录音→上传→结果→复测 | ❌ | 需真机验证（WBS 7.4） |
 | 结果卡图片导出 | ❌ | 当前只有文案/系统分享（WBS 4.5） |
-| H5 验证端 | ❌ | WBS 4A.1-4A.4 |
+| H5 验证端 | ⚠️ | `apps/web`：骨架/匿名登录/录音上传已跑通；结果页/复测待做（4A.3） |
 | 小程序（可选） | 🚫/❌ | 仅在有需求时用 uni-app，不在 MVP 主线 |
 
 ## 3. 后端与数据
@@ -35,6 +35,7 @@
 | 发布/灰度/回滚/审计 | ✅ | Admin API + e2e |
 | 指标聚合 + KPI + 渠道口径 | ✅ | 代码已支持；H5 渠道待接 |
 | 音频标准化（16k mono PCM） | ✅ | `services/inference/app/audio.py` + pytest + e2e |
+| H5 CORS（本地/白名单） | ✅ | `internal/http/cors.go` + 单测 + 浏览器上传冒烟 |
 | 签名 token + 限流 | ❌ | 当前 `dev-token-*`（WBS 3.6） |
 | 对象存储跨端配置 | ⚠️ | S3Mock 可用；生产 CORS/小程序代理未配（WBS 3.7） |
 | 分享物料渠道化 | ❌ | `share_asset.channel` 未实现（WBS 3.8） |

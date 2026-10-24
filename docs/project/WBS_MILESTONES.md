@@ -50,7 +50,7 @@
 | 1.3 | Python 推理骨架（`/infer` stub） | Inference | 1d | 1.1 | 推理服务 | 返回 schema/model version | 已实现 |
 | 1.4 | 音频链路约束（格式/时长/保存） | Mobile+Web+Backend | 1d | 1.1 | 录音策略 | 10 秒上限；m4a 优先；保存策略明确 | 进行中 |
 | 1.5 | **音频标准化/转码** | Backend+Inference | 2d | 1.4 | 转码服务 | 所有渠道统一转 16kHz/mono/PCM WAV；失败可观测 | 已实现 |
-| 1.6 | **跨端访问（CORS/HTTPS/域名）** | Backend+Ops | 1d | 1.2 | 部署配置 | H5 可跨域调用；HTTPS；CORS 白名单 | 计划中 |
+| 1.6 | **跨端访问（CORS/HTTPS/域名）** | Backend+Ops | 1d | 1.2 | 部署配置 | H5 可跨域调用；HTTPS；CORS 白名单 | 进行中（CORS 已实现，HTTPS/域名待做） |
 
 ### 2.2 内容数据与发布系统
 
@@ -88,8 +88,8 @@
 
 | WBS ID | 工作包 | 负责人角色 | 工期 | Deps | 交付物 | 验收标准（DoD） | 状态 |
 |---|---|---|---:|---|---|---|---|
-| 4A.1 | H5 工程骨架 | Web | 2d | 1.2 | `apps/web` | Vue/uni-app 可运行；可调用 API | 计划中 |
-| 4A.2 | H5 录音 + 上传 | Web | 2d | 4A.1,3.2 | 录音页 | MediaRecorder；上传成功 | 计划中 |
+| 4A.1 | H5 工程骨架 | Web | 2d | 1.2 | `apps/web` | Vue/uni-app 可运行；可调用 API | 已实现 |
+| 4A.2 | H5 录音 + 上传 | Web | 2d | 4A.1,3.2 | 录音页 | MediaRecorder；上传成功 | 已实现 |
 | 4A.3 | H5 结果页 + 复测 | Web | 3d | 4A.2,3.3,3.4 | 结果页 | 意图/解释/建议/风险/复测可用 | 计划中 |
 | 4A.4 | H5 分享/引流 | Web+Ops | 2d | 4A.3,3.8 | 分享页 | 链接/二维码；可回流复测 | 计划中 |
 
@@ -134,9 +134,9 @@
 | 内容/API | 已实现 | 迁移 0001-0003、seed 全量、内容 API、结果组装 | 补音频标准化 1.5 |
 | 运营后台 | 大部分已实现 | CRUD、发布/回滚、指标、审计、结果页预览 | 模板/全局文案页 5.3 |
 | Flutter | 功能已实现 | 录音/上传/结果/问题库/复测/分享/埋点 | 补 android/ios 平台工程 4.1、真机验证 |
-| H5 验证端 | 未开始 | - | 4A.1-4A.4 |
+| H5 验证端 | 进行中 | 骨架/匿名登录/录音上传已跑通 | 结果页与复测 4A.3 |
 | 推理 | 占位 stub | Python 仅按 time_of_day 返回 | 定义“可信推理 v0.1” |
-| 跨端适配 | 音频标准化已实现；其余未开始 | `services/inference/app/audio.py` | 1.6/3.6/3.7/3.8 |
+| 跨端适配 | 音频标准化/CORS 已实现；其余未开始 | `audio.py` + `internal/http/cors.go` | HTTPS/域名、token、存储、分享渠道 |
 | 部署 | 未开始 | 仅本地 compose | Dockerfile/托管 DB/存储/HTTPS |
 | 合规 | 未开始 | 仅文案声明 | 7.5 |
 | 增长素材 | 部分 | SOP 文档 | 7.1 |

@@ -13,6 +13,7 @@
   - 本地开发：`Authorization: Bearer dev-token-<user_id>`（仅限本地/CI）
   - 公网/H5：签名 token（HMAC/JWT），不可伪造；见 ADR-0004
 - 渠道：可选请求头 `X-Client-Channel: app|h5|wechat_mini`（默认 `app`）
+- CORS：H5 源由 `MIAODONG_CORS_ORIGINS` 配置；未配置时只放行本机开发源
 - Trace：服务端返回 `X-Request-Id`
 - 版本：响应体包含 `schema_version`、`model_version`、并记录 `content_version`
 - 限流：超限返回 429，错误码 `RATE_LIMITED`
