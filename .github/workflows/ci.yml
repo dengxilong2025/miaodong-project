@@ -226,6 +226,7 @@ jobs:
         env:
           MIAODONG_DSN: postgres://postgres:postgres@localhost:5432/miaodong?sslmode=disable
           GOFLAGS: -mod=mod
+          MIAODONG_AUDIO_STORAGE: api-direct
         run: |
           set -euo pipefail
           API_URL="http://127.0.0.1:8080"
@@ -279,8 +280,7 @@ jobs:
 
           UPLOAD_JSON=$(curl -fsS -X POST "${API_URL}/v1/audio/upload-url" -H "Content-Type: application/json" -d '{}')
           UPLOAD_URL=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["upload_url"])' <<<"${UPLOAD_JSON}")
-          AUDIO_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["audio_id"])' <<<"${UPLOAD_JSON}")
-          AUDIO_URL="${API_URL}/v1/audio/${AUDIO_ID}"
+          AUDIO_URL=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["audio_url"])' <<<"${UPLOAD_JSON}")
           curl -fsS -X PUT --data-binary @/tmp/e2e.wav "${UPLOAD_URL}"
 
           curl -fsS -X POST "${API_URL}/v1/inference" \
