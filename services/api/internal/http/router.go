@@ -61,5 +61,5 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/v1/feedback", handlers.Feedback)
 	mux.HandleFunc("/v1/retest", handlers.Retest)
 
-	return authctx.Middleware(mux)
+	return withCORS(authctx.Middleware(mux))
 }
