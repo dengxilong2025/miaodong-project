@@ -21,7 +21,7 @@ export class Telemetry {
     }
   }
 
-  async track(eventName, payload = {}) {
+  async track(eventName, payload = {}, { requestId, contentVersion } = {}) {
     const event = {
       event_name: eventName,
       ts_ms: Date.now(),
@@ -31,6 +31,10 @@ export class Telemetry {
       channel: 'h5',
       app_version: APP_VERSION,
       payload,
+    }
+    if (requestId) event.request_id = String(requestId)
+    if (Number.isFinite(contentVersion) && contentVersion > 0) {
+      event.content_version = contentVersion
     }
     try {
       await this.api.postJson('/v1/analytics/event', event)

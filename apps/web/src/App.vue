@@ -1,8 +1,10 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 
 import { createApiClient } from './api/client'
+import ResultView from './components/ResultView.vue'
 import { formatClock, useRecorder } from './composables/useRecorder'
+import { primaryIntentCode } from './lib/result'
 import { Telemetry } from './telemetry'
 
 const api = createApiClient()
@@ -14,18 +16,33 @@ const authError = ref('')
 const userId = ref('')
 const problems = ref([])
 const loadingProblems = ref(false)
+const selectedProblemId = ref('')
 
 const uploading = ref(false)
 const uploadError = ref('')
 const uploadResult = ref(null)
 
+const inferenceState = ref('idle')
+const inferenceResult = ref(null)
+const inferenceError = ref('')
+const resultAnchor = ref(null)
+
 const isRecording = computed(() => recorder.state.value === 'recording')
+const analyzing = computed(() => inferenceState.value === 'loading')
+const canSwitchProblem = computed(
+  () => !uploading.value && !analyzing.value && !isRecording.value,
+)
 const canUpload = computed(
   () => recorder.state.value === 'recorded' && !!recorder.blob.value && !uploading.value,
 )
 
 function errorText(error) {
   return error?.message || String(error)
+}
+
+function timeOfDay() {
+  const hour = new Date().getHours()
+  return hour >= 22 || hour < 6 ? 'night' : 'day'
 }
 
 async function bootstrap() {
@@ -47,6 +64,9 @@ async function loadProblems() {
   try {
     const data = await api.getJson('/v1/problems?limit=3')
     problems.value = Array.isArray(data.items) ? data.items : []
+    if (!selectedProblemId.value && problems.value.length) {
+      selectedProblemId.value = problems.value[0].id
+    }
   } catch {
     problems.value = []
   } finally {
@@ -54,9 +74,25 @@ async function loadProblems() {
   }
 }
 
-async function startRecording() {
-  uploadError.value = ''
+function selectProblem(problemId) {
+  if (!canSwitchProblem.value) return
+  if (selectedProblemId.value === problemId) return
+  selectedProblemId.value = problemId
+  if (uploadResult.value?.audio_url) {
+    void runInference()
+  }
+}
+
+function clearResult() {
   uploadResult.value = null
+  uploadError.value = ''
+  inferenceState.value = 'idle'
+  inferenceResult.value = null
+  inferenceError.value = ''
+}
+
+async function startRecording() {
+  clearResult()
   await recorder.start()
 }
 
@@ -65,8 +101,7 @@ async function stopRecording() {
 }
 
 function resetRecording() {
-  uploadError.value = ''
-  uploadResult.value = null
+  clearResult()
   recorder.reset()
 }
 
@@ -76,6 +111,8 @@ async function uploadRecording() {
   uploading.value = true
   uploadError.value = ''
   uploadResult.value = null
+  inferenceState.value = 'idle'
+  inferenceResult.value = null
 
   let stage = 'upload_url'
   try {
@@ -100,6 +137,9 @@ async function uploadRecording() {
       audio_id: instruction.audio_id,
       bytes: data.size,
     })
+
+    uploading.value = false
+    await runInference()
   } catch (error) {
     uploadError.value = errorText(error)
     await telemetry.track('audio_upload_failed', {
@@ -109,6 +149,81 @@ async function uploadRecording() {
   } finally {
     uploading.value = false
   }
+}
+
+async function runInference() {
+  const audio = uploadResult.value
+  if (!audio?.audio_url) return
+
+  inferenceState.value = 'loading'
+  inferenceError.value = ''
+  inferenceResult.value = null
+
+  await telemetry.track('inference_started', {
+    audio_id: audio.audio_id,
+    entry: 'TEST',
+    problem_id: selectedProblemId.value || null,
+    context_keys: ['time_of_day'],
+  })
+
+  try {
+    const res = await api.postJson('/v1/inference', {
+      audio_url: audio.audio_url,
+      entry: 'TEST',
+      problem_id: selectedProblemId.value || undefined,
+      context: { time_of_day: timeOfDay() },
+    })
+    inferenceResult.value = res
+
+    const degraded = res.degraded === true || res.degraded === 'true'
+    inferenceState.value = degraded ? 'degraded' : 'success'
+
+    const meta = {
+      requestId: res.request_id,
+      contentVersion: Number(res.content_version),
+    }
+    if (degraded) {
+      await telemetry.track(
+        'inference_failed',
+        {
+          degraded: true,
+          degraded_reason: res.degraded_reason || null,
+          elapsed_ms: res.inference_latency_ms ?? null,
+        },
+        meta,
+      )
+    } else {
+      const primary = res.primary_intent || {}
+      await telemetry.track(
+        'inference_succeeded',
+        {
+          model_version: res.model_version || null,
+          primary_intent_code: primaryIntentCode(res) || null,
+          confidence: primary.confidence ?? null,
+          risk_badges: Array.isArray(res.risk_badges)
+            ? res.risk_badges.map((badge) => badge?.code).filter(Boolean)
+            : [],
+        },
+        meta,
+      )
+    }
+
+    await nextTick()
+    resultAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  } catch (error) {
+    inferenceState.value = 'error'
+    inferenceError.value = errorText(error)
+    await telemetry.track('inference_failed', {
+      degraded: false,
+      error: inferenceError.value,
+      problem_id: selectedProblemId.value || null,
+    })
+  }
+}
+
+function startAgain() {
+  resetRecording()
+  nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
 }
 
 onMounted(bootstrap)
@@ -143,6 +258,33 @@ onMounted(bootstrap)
           <h2>录一段猫叫</h2>
           <p class="hint">保持环境安静，手机靠近猫，最长 10 秒。</p>
         </div>
+      </div>
+
+      <div v-if="problems.length" class="problem-picker">
+        <span class="picker-label">这次想先排查</span>
+        <div class="chips">
+          <button
+            class="chip"
+            :class="{ 'is-active': !selectedProblemId }"
+            type="button"
+            :disabled="!canSwitchProblem"
+            @click="selectProblem('')"
+          >
+            还不确定
+          </button>
+          <button
+            v-for="problem in problems"
+            :key="problem.id"
+            class="chip"
+            :class="{ 'is-active': selectedProblemId === problem.id }"
+            type="button"
+            :disabled="!canSwitchProblem"
+            @click="selectProblem(problem.id)"
+          >
+            {{ problem.title }}
+          </button>
+        </div>
+        <p class="hint">选择后结果会附带对应追问与排查建议；切换会重新分析当前录音。</p>
       </div>
 
       <div class="recorder-body">
@@ -180,7 +322,7 @@ onMounted(bootstrap)
               重新录
             </button>
             <button class="primary-button" type="button" :disabled="!canUpload" @click="uploadRecording">
-              {{ uploading ? '正在上传…' : '上传录音' }}
+              {{ uploading ? '正在上传…' : '上传并分析' }}
             </button>
           </div>
         </template>
@@ -192,17 +334,50 @@ onMounted(bootstrap)
       </div>
 
       <div v-else-if="uploadResult" class="notice is-success">
-        <strong>上传成功</strong>
-        <span>音频编号 {{ uploadResult.audio_id }}，下一步接入结果页。</span>
+        <strong>录音已上传</strong>
+        <span>音频编号 {{ uploadResult.audio_id }}</span>
       </div>
     </section>
+
+    <section v-if="analyzing" class="card analyzing-card">
+      <div class="status-center">
+        <span class="pulse"></span>
+        <p>正在分析这段猫叫…</p>
+        <p class="hint">首次分析需要下载并标准化音频，请稍等。</p>
+      </div>
+    </section>
+
+    <section v-else-if="inferenceState === 'error'" class="card">
+      <div class="card-head">
+        <span class="step">!</span>
+        <div>
+          <h2>分析失败</h2>
+          <p class="hint">{{ inferenceError }}</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary-button" type="button" @click="runInference">重试</button>
+        <button class="secondary-button" type="button" @click="startAgain">重新录音</button>
+      </div>
+    </section>
+
+    <div v-else-if="inferenceResult" ref="resultAnchor" class="result-anchor">
+      <ResultView
+        :api="api"
+        :telemetry="telemetry"
+        :result="inferenceResult"
+        :problem-id="selectedProblemId"
+        @retry="runInference"
+        @again="startAgain"
+      />
+    </div>
 
     <section class="card problems-card">
       <div class="card-head">
         <span class="step">02</span>
         <div>
           <h2>先看常见问题</h2>
-          <p class="hint">数据来自同一套问题库，后续可直接进入详情。</p>
+          <p class="hint">数据来自同一套问题库，可切换上方排查方向。</p>
         </div>
       </div>
 
